@@ -847,91 +847,14 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
       {/* 4. MAIN SPLIT-SCREEN WORKSPACE */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
-        {/* LEFT PANEL: PROMINENT SEARCH BAR & PLACES LISTING */}
+        {/* LEFT PANEL: PLACES LISTING */}
         {viewMode === 'split' && (
           <aside className="w-full lg:w-[38%] xl:w-[34%] bg-white border-r border-slate-200/90 flex flex-col h-full overflow-hidden shrink-0 z-10 shadow-xs">
-            {/* SEARCH INPUT & TRIPADVISOR AUTO-SUGGESTIONS DROPDOWN */}
-            <div className="p-3.5 border-b border-slate-100 bg-white shrink-0 relative" ref={searchContainerRef}>
-              <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-                <div className="absolute left-3.5 text-slate-400 pointer-events-none flex items-center justify-center">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  value={searchInput}
-                  onFocus={() => {
-                    if (suggestions.length > 0) setShowSuggestions(true)
-                  }}
-                  onChange={(e) => {
-                    setSearchInput(e.target.value)
-                    setShowSuggestions(true)
-                  }}
-                  placeholder={`Search places in ${currentLoc.city} (e.g. beach, cafe, restaurant)…`}
-                  className="w-full bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-slate-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 rounded-2xl pl-10 pr-20 py-2.5 text-xs text-slate-900 placeholder-slate-400 outline-none transition font-medium shadow-2xs"
-                />
-                {searchInput && (
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    className="absolute right-16 text-slate-400 hover:text-slate-700 transition p-1 text-xs"
-                    title="Clear search"
-                  >
-                    ✕
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  className="absolute right-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
-                >
-                  Search
-                </button>
-              </form>
-
-              {/* LIVE TRIPADVISOR SUGGESTIONS POPUP */}
-              {showSuggestions && (suggestions.length > 0 || suggestionsLoading) && (
-                <div className="absolute top-full left-3.5 right-3.5 mt-1.5 bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
-                  <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <span>TripAdvisor® Suggestions</span>
-                    {suggestionsLoading && <span className="animate-pulse text-emerald-700">Searching…</span>}
-                  </div>
-                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
-                    {suggestions.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleSelectSuggestion(item)}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50/70 transition flex items-start gap-2.5 cursor-pointer group"
-                      >
-                        <span className="text-emerald-700 mt-0.5 text-sm">📍</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 truncate">
-                            {item.name}
-                          </p>
-                          {item.address && (
-                            <p className="text-[11px] text-slate-400 truncate">
-                              {item.address}
-                            </p>
-                          )}
-                        </div>
-                        {item.geo && (
-                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium shrink-0">
-                            {item.geo}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Status Header */}
-              <div className="mt-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  <span>TRIPADVISOR / {currentLoc.city.toUpperCase()}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+            {/* CLEAN PANEL HEADER WITH CURRENT SCOPE & STATUS */}
+            <div className="p-4 border-b border-slate-100 bg-white shrink-0">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <span>TRIPADVISOR / {currentLoc.city.toUpperCase()}</span>
+                <div className="flex items-center gap-1.5 text-slate-700 font-medium lowercase">
                   <span className="text-slate-400 text-[10px]">Sort:</span>
                   <select
                     value={sortBy}
@@ -945,11 +868,14 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mt-1">
+              <div className="flex items-center justify-between mt-1.5">
                 <h2 className="text-lg font-extrabold text-slate-900">
                   {activeSearch ? (
-                    <span>
-                      &ldquo;{activeSearch}&rdquo; in {currentLoc.city} ({filteredPlaces.length})
+                    <span className="flex items-center gap-1.5">
+                      <span>&ldquo;{activeSearch}&rdquo; in {currentLoc.city}</span>
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        {filteredPlaces.length}
+                      </span>
                     </span>
                   ) : (
                     <span>
@@ -967,8 +893,25 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 )}
               </div>
 
+              {/* Scope change helper button */}
+              <div className="mt-2.5 flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200/80 text-xs">
+                <div className="flex items-center gap-1.5 text-slate-700 font-medium truncate">
+                  <span>📍</span>
+                  <span className="font-bold text-slate-900">{currentLoc.city}</span>
+                  <span className="text-slate-400">·</span>
+                  <span className="text-slate-500 capitalize">{category}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLocationModalOpen(true)}
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-emerald-800 font-bold transition cursor-pointer shrink-0 shadow-2xs"
+                >
+                  Change Place / Search ↗
+                </button>
+              </div>
+
               {clusters.length > 1 && (
-                <div className="flex items-center gap-1.5 mt-2 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto no-scrollbar">
                   <span className="text-[11px] font-bold text-slate-400 mr-1 shrink-0">Areas:</span>
                   {clusters.map((cl) => (
                     <button

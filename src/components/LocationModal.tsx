@@ -175,29 +175,7 @@ export default function LocationModal({
           </select>
         </div>
 
-        {/* Category Selection */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Category</label>
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCategory(c.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                  category === c.id
-                    ? 'border-emerald-700 bg-emerald-800 text-white shadow-xs'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <span>{c.icon}</span>
-                <span>{c.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Specific Place / Manual Keyword Search with TripAdvisor Auto-suggestions */}
+        {/* Search Bar PLACED AT THE TOP OF CATEGORY */}
         <div className="relative" ref={searchInputRef}>
           <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
             <span>Search Specific Place / Keyword (Optional)</span>
@@ -239,8 +217,7 @@ export default function LocationModal({
           {showSuggestions && suggestions.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
               <div className="px-3.5 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                <span>TripAdvisor® Suggestions</span>
-                <span className="text-emerald-700 font-semibold">{city}</span>
+                <span>TripAdvisor® Suggestions in {city}</span>
               </div>
               <div className="max-h-48 overflow-y-auto divide-y divide-slate-100">
                 {suggestions.map((item) => (
@@ -271,6 +248,28 @@ export default function LocationModal({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Category Selection */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Category</label>
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCategory(c.id)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                  category === c.id
+                    ? 'border-emerald-700 bg-emerald-800 text-white shadow-xs'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <span>{c.icon}</span>
+                <span>{c.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Actions */}

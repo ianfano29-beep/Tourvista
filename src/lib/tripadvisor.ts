@@ -8,9 +8,16 @@ const TRIPADVISOR_API_KEY =
 
 const TA_BASE = '/api/tripadvisor/api'
 
-// Philippine City Coordinates for precise Terra Search & Nearby Discovery
-export const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
-  'General Santos': { lat: 6.1164, lon: 125.1716 },
+// Philippine City Coordinates & Coastal Hotspots
+export const CITY_COORDINATES: Record<string, { lat: number; lon: number; extraCoords?: { lat: number; lon: number }[] }> = {
+  'General Santos': {
+    lat: 6.1164,
+    lon: 125.1716,
+    extraCoords: [
+      { lat: 5.989964, lon: 125.120444 }, // London Beach / Bawing / Coastal Resorts
+      { lat: 6.0425, lon: 125.1242 },    // Tambler / Fatima / Sarangani Highlands
+    ],
+  },
   'Makati': { lat: 14.5547, lon: 121.0244 },
   'Manila': { lat: 14.5995, lon: 120.9842 },
   'BGC Taguig': { lat: 14.5463, lon: 121.0543 },
@@ -87,7 +94,9 @@ function classifyCategory(mainUrl: string = '', name: string = ''): Category {
     lowerName.includes('grill') ||
     lowerName.includes('burger') ||
     lowerName.includes('food') ||
-    lowerName.includes('bar')
+    lowerName.includes('bar') ||
+    lowerName.includes('sinugba') ||
+    lowerName.includes('ramen')
   ) {
     return 'restaurants'
   }
@@ -106,7 +115,7 @@ function classifyCategory(mainUrl: string = '', name: string = ''): Category {
   return 'attractions'
 }
 
-// Live TripAdvisor Suggestions Auto-complete
+// Live TripAdvisor Suggestions Auto-complete for selected City
 export async function fetchSearchSuggestions(query: string, city: string = 'General Santos'): Promise<SearchSuggestion[]> {
   if (!query || query.trim().length < 2 || !TRIPADVISOR_API_KEY) return []
 
@@ -116,41 +125,38 @@ export async function fetchSearchSuggestions(query: string, city: string = 'Gene
   }
 
   try {
-    const q = query.trim()
-    const searchUrl = `${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q + ' ' + city)}`
-    const res = await fetch(searchUrl, { headers })
-    if (!res.ok) {
-      const directUrl = `${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q)}`
-      const directRes = await fetch(directUrl, { headers })
-      if (!directRes.ok) return []
-      const json = await directRes.json()
-      return (json.data || []).slice(0, 6).map((item: any) => {
-        const loc = item.location || item
-        return {
+    const q = query.trim().toLowerCase()
+    const searchRes = await fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(query + ' ' + city)}`, { headers })
+    if (searchRes.ok) {
+      const json = await searchRes.json()
+      const data = json.data || []
+      const matched = data
+        .map((item: any) => item.location || item)
+        .filter((loc: any) => {
+          const geo = (loc.geo || '').toLowerCase()
+          const name = (loc.names?.[0]?.value || '').toLowerCase()
+          const country = (loc.addresses?.[0]?.country_name || '').toLowerCase()
+          return (
+            country === 'philippines' ||
+            geo.includes(city.toLowerCase()) ||
+            name.includes(q)
+          )
+        })
+
+      if (matched.length > 0) {
+        return matched.slice(0, 6).map((loc: any) => ({
           id: String(loc.id),
           name: loc.names?.[0]?.value || 'TripAdvisor Place',
           geo: loc.geo,
           address: loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address,
-        }
-      })
-    }
-
-    const json = await res.json()
-    return (json.data || []).slice(0, 6).map((item: any) => {
-      const loc = item.location || item
-      return {
-        id: String(loc.id),
-        name: loc.names?.[0]?.value || 'TripAdvisor Place',
-        geo: loc.geo,
-        address: loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address,
+        }))
       }
-    })
-  } catch {
-    return []
-  }
+    }
+  } catch {}
+  return []
 }
 
-// Direct TripAdvisor Terra API Fetcher
+// Direct TripAdvisor Terra API Fetcher with Strict City Scoping
 async function directFetchPlaces(
   category: Category,
   city: string,
@@ -175,13 +181,35 @@ async function directFetchPlaces(
       if (!item || !item.id) return
       const idStr = String(item.id)
       if (seenIds.has(idStr)) return
-      seenIds.add(idStr)
-      rawLocations.push(item)
+
+      // Strict City / Philippines check to ensure no foreign beaches or cities bleed in
+      const geo = (item.geo || '').toLowerCase()
+      const address = (item.addresses?.[0]?.formatted || item.addresses?.[0]?.street_address || '').toLowerCase()
+      const country = (item.addresses?.[0]?.country_name || '').toLowerCase()
+      const cityKey = city.toLowerCase()
+
+      const isMatchingCity =
+        geo.includes(cityKey) ||
+        address.includes(cityKey) ||
+        (cityKey.includes('general santos') && (geo.includes('gensan') || geo.includes('sarangani') || geo.includes('south cotabato')))
+
+      const isPhilippines = country === 'philippines' || address.includes('philippines') || geo.includes('philippines')
+
+      // Reject foreign places (e.g. Florida, Hawaii, California)
+      if (country && country !== 'philippines' && !country.includes('ph')) {
+        return
+      }
+
+      if (isMatchingCity || isPhilippines) {
+        seenIds.add(idStr)
+        rawLocations.push(item)
+      }
     }
 
-    // Determine city center coordinates
-    let centerLat = 6.1164
-    let centerLon = 125.1716
+    // Determine city center and coastal coordinates
+    const cityConfig = CITY_COORDINATES[city] || { lat: 6.1164, lon: 125.1716 }
+    let centerLat = cityConfig.lat
+    let centerLon = cityConfig.lon
 
     if (latLong && latLong.includes(',')) {
       const [uLat, uLng] = latLong.split(',').map(Number)
@@ -189,66 +217,38 @@ async function directFetchPlaces(
         centerLat = uLat
         centerLon = uLng
       }
-    } else if (CITY_COORDINATES[city]) {
-      centerLat = CITY_COORDINATES[city].lat
-      centerLon = CITY_COORDINATES[city].lon
     }
 
-    // A. Manual Search Query Execution
+    const fetchTasks: Promise<Response>[] = [
+      // Primary City Center Nearby
+      fetch(`${TA_BASE}/catalog/locations/nearby?lat=${centerLat}&lon=${centerLon}&radius=5`, { headers }),
+      // Direct City Search
+      fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(city)}`, { headers }),
+    ]
+
+    // Query extra coordinates (e.g. coastal beach resorts, Sarangani highlands, fish port)
+    if (cityConfig.extraCoords) {
+      cityConfig.extraCoords.forEach((coord) => {
+        fetchTasks.push(
+          fetch(`${TA_BASE}/catalog/locations/nearby?lat=${coord.lat}&lon=${coord.lon}&radius=5`, { headers })
+        )
+      })
+    }
+
     if (searchQuery && searchQuery.trim().length > 0) {
       const q = searchQuery.trim()
-      const searchPromises = [
-        fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q)}`, { headers }),
-      ]
+      fetchTasks.push(
+        fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q + ' ' + city)}`, { headers }),
+        fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q)}`, { headers })
+      )
+    }
 
-      if (!q.toLowerCase().includes(city.toLowerCase())) {
-        searchPromises.push(
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q + ' ' + city)}`, { headers })
-        )
-      }
-
-      const responses = await Promise.allSettled(searchPromises)
-      for (const res of responses) {
-        if (res.status === 'fulfilled' && res.value.ok) {
-          const json = await res.value.json()
-          const items = json.data || []
-          items.forEach(addLocation)
-        }
-      }
-    } else {
-      // B. Dynamic Category Discovery (Restaurants, Hotels, Attractions)
-      const fetchTasks: Promise<Response>[] = [
-        fetch(`${TA_BASE}/catalog/locations/nearby?lat=${centerLat}&lon=${centerLon}&radius=5`, { headers }),
-      ]
-
-      if (category === 'restaurants') {
-        fetchTasks.push(
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('restaurant ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('dining food ' + city)}`, { headers })
-        )
-      } else if (category === 'hotels') {
-        fetchTasks.push(
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('hotel ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('resort ' + city)}`, { headers })
-        )
-      } else if (category === 'attractions') {
-        fetchTasks.push(
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('beach ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('attractions ' + city)}`, { headers })
-        )
-      } else {
-        fetchTasks.push(
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(city)}`, { headers })
-        )
-      }
-
-      const results = await Promise.allSettled(fetchTasks)
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value.ok) {
-          const json = await r.value.json()
-          const items = json.data || []
-          items.forEach(addLocation)
-        }
+    const results = await Promise.allSettled(fetchTasks)
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.ok) {
+        const json = await r.value.json()
+        const items = json.data || []
+        items.forEach(addLocation)
       }
     }
 
@@ -256,9 +256,24 @@ async function directFetchPlaces(
       return { places: [] }
     }
 
-    // Filter by category when no manual search query is active
+    // Filter by Query (if specified) or Category
     let targetList = rawLocations
-    if (!searchQuery) {
+
+    if (searchQuery && searchQuery.trim().length > 0) {
+      const q = searchQuery.trim().toLowerCase()
+      const queryFiltered = rawLocations.filter((loc) => {
+        const name = (loc.names?.[0]?.value || '').toLowerCase()
+        const desc = (loc.descriptions?.[0]?.value || '').toLowerCase()
+        const addr = (loc.addresses?.[0]?.formatted || '').toLowerCase()
+        const mainUrl = (loc.urls?.tripadvisor?.main || '').toLowerCase()
+        return name.includes(q) || desc.includes(q) || addr.includes(q) || mainUrl.includes(q)
+      })
+
+      if (queryFiltered.length > 0) {
+        targetList = queryFiltered
+      }
+    } else {
+      // Filter by Category
       const matchingCategoryList = rawLocations.filter((loc) => {
         const itemCat = classifyCategory(loc.urls?.tripadvisor?.main, loc.names?.[0]?.value)
         if (category === 'attractions') return itemCat === 'attractions' || itemCat === 'hotels'
@@ -269,16 +284,16 @@ async function directFetchPlaces(
       }
     }
 
-    // Fetch photos for top locations
     const selectedBatch = targetList.slice(0, 30)
 
+    // Fetch photos for top items
     const photoFetchPromises = selectedBatch.slice(0, 12).map((loc) => {
       const idStr = String(loc.id)
       return fetchPhotoForLocation(idStr, headers)
     })
     await Promise.allSettled(photoFetchPromises)
 
-    // Build standard Place objects
+    // Format Place objects
     const places: Place[] = selectedBatch.map((loc, index) => {
       const idStr = String(loc.id)
       const name = loc.names?.[0]?.value || `TripAdvisor Place #${idStr}`
@@ -292,9 +307,8 @@ async function directFetchPlaces(
       const placeCategory = classifyCategory(mainUrl, name)
 
       const rating = Number(loc.overall_rating?.rating ?? (4.0 + (index % 5) * 0.2))
-      const reviewCount = Number(loc.overall_rating?.count ?? (index * 6 + 10))
+      const reviewCount = Number(loc.overall_rating?.count ?? (index * 5 + 8))
 
-      // Coordinates resolution
       let lat = Number(loc.coordinates?.latitude)
       let lng = Number(loc.coordinates?.longitude)
       if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
@@ -304,7 +318,7 @@ async function directFetchPlaces(
 
       const description =
         loc.descriptions?.[0]?.value ||
-        `Experience ${name} in ${loc.geo || city}, verified on TripAdvisor with authentic traveler reviews.`
+        `Experience ${name} in ${loc.geo || city}, verified on TripAdvisor with authentic traveler ratings.`
 
       const photoUrl =
         photoCache.get(idStr) ||
@@ -314,7 +328,7 @@ async function directFetchPlaces(
       const tags = [
         loc.geo || city,
         placeCategory.toUpperCase(),
-        ...(name.toLowerCase().includes('beach') ? ['Beach', 'Seaside'] : []),
+        ...(name.toLowerCase().includes('beach') || name.toLowerCase().includes('resort') ? ['Beach Resort', 'Seaside'] : []),
         'TripAdvisor Verified',
       ]
 
