@@ -6,7 +6,7 @@ const TRIPADVISOR_API_KEY =
   (import.meta.env.VITE_TRIPADVISOR_KEY as string | undefined) ||
   'ab2264da-675f-43bc-82b0-f85288835d00'
 
-const TA_BASE = '/api/tripadvisor/api/catalog/locations'
+const TA_BASE = '/api/tripadvisor/api'
 
 // Known Philippine City Coordinates for precise Terra Nearby Search
 const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
@@ -71,8 +71,8 @@ async function directFetchPlaces(category: Category, city: string, latLong?: str
       'X-API-KEY': TRIPADVISOR_API_KEY,
     }
 
-    // 1. Fetch nearby venues around coordinates
-    const nearbyUrl = `${TA_BASE}/nearby?lat=${lat}&lon=${lon}&radius=5`
+    // 1. Fetch nearby POIs around coordinates
+    const nearbyUrl = `${TA_BASE}/catalog/locations/nearby?lat=${lat}&lon=${lon}&radius=5`
     const res = await fetch(nearbyUrl, { headers })
 
     if (!res.ok) {
@@ -104,36 +104,52 @@ async function directFetchPlaces(category: Category, city: string, latLong?: str
       filtered = rawData
     }
 
-    // Limit to 1 place for testing / quota savings
-    const places: Place[] = filtered.slice(0, 1).map((item: any, idx: number): Place => {
-      const loc = item.location || {}
-      const name = loc.names?.[0]?.value || 'TripAdvisor Venue'
-      const address = loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address || city
-      const rating = Number(loc.overall_rating?.rating ?? 4.0)
-      const reviewCount = Number(loc.overall_rating?.count ?? 1)
-      const pLat = Number(loc.coordinates?.latitude || lat)
-      const pLng = Number(loc.coordinates?.longitude || lon)
-      const mainUrl = loc.urls?.tripadvisor?.main || 'https://www.tripadvisor.com'
+    // Process places (limit 1 for testing / quota savings) and fetch real TripAdvisor photos
+    const places = await Promise.all(
+      filtered.slice(0, 1).map(async (item: any, idx: number): Promise<Place> => {
+        const loc = item.location || {}
+        const name = loc.names?.[0]?.value || 'TripAdvisor Venue'
+        const address = loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address || city
+        const rating = Number(loc.overall_rating?.rating ?? 4.0)
+        const reviewCount = Number(loc.overall_rating?.count ?? 1)
+        const pLat = Number(loc.coordinates?.latitude || lat)
+        const pLng = Number(loc.coordinates?.longitude || lon)
+        const mainUrl = loc.urls?.tripadvisor?.main || 'https://www.tripadvisor.com'
 
-      return {
-        id: String(loc.id),
-        rank: idx + 1,
-        name,
-        category,
-        rating,
-        reviewCount,
-        price: '₱₱',
-        cluster: loc.geo || city,
-        address,
-        description: loc.descriptions?.[0]?.value || `Authentic verified destination in ${city} on TripAdvisor.`,
-        photo: CATEGORY_PHOTOS[category] || CATEGORY_PHOTOS.restaurants,
-        url: mainUrl,
-        lat: pLat,
-        lng: pLng,
-        openStatus: 'Open Now',
-        tags: [loc.geo || city, 'TripAdvisor Verified', 'Live API'],
-      }
-    })
+        let photoUrl = CATEGORY_PHOTOS[category] || CATEGORY_PHOTOS.restaurants
+
+        // Fetch authentic live photos from TripAdvisor CDN for this location
+        try {
+          const photoRes = await fetch(`${TA_BASE}/locations/${loc.id}/photos`, { headers })
+          if (photoRes.ok) {
+            const photoData = await photoRes.json()
+            const realImg = photoData.data?.[0]?.photo?.original_size_url
+            if (realImg) {
+              photoUrl = realImg
+            }
+          }
+        } catch {}
+
+        return {
+          id: String(loc.id),
+          rank: idx + 1,
+          name,
+          category,
+          rating,
+          reviewCount,
+          price: '₱₱',
+          cluster: loc.geo || city,
+          address,
+          description: loc.descriptions?.[0]?.value || `Authentic verified destination in ${city} on TripAdvisor.`,
+          photo: photoUrl,
+          url: mainUrl,
+          lat: pLat,
+          lng: pLng,
+          openStatus: 'Open Now',
+          tags: [loc.geo || city, 'TripAdvisor Verified', 'Live API'],
+        }
+      })
+    )
 
     return { places }
   } catch (err: any) {
@@ -169,14 +185,37 @@ export async function fetchPlaces(category: Category, city: string, latLong?: st
 }
 
 export async function fetchReviews(id: string): Promise<Review[]> {
-  return [
-    {
-      id: 1,
-      title: 'Great experience in General Santos!',
-      text: 'Verified traveler review from TripAdvisor. Great atmosphere and exceptional local service.',
-      rating: 5,
-      user: { username: 'TripAdvisor Explorer' },
-      date: 'Recent',
+  if (!TRIPADVISOR_API_KEY) return []
+
+  try {
+    const headers = {
+      'accept': 'application/json',
+      'X-API-KEY': TRIPADVISOR_API_KEY,
     }
-  ]
+
+    const res = await fetch(`${TA_BASE}/locations/${id}/reviews`, { headers })
+    if (!res.ok) return []
+
+    const json = await res.json()
+    const data = json.data ?? []
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return []
+    }
+
+    return data.slice(0, 5).map((r: any, idx: number) => ({
+      id: r.id || idx + 1,
+      title: r.title || 'Verified Traveler Review',
+      text: r.text || r.summary || 'Authentic review from TripAdvisor traveler.',
+      rating: Number(r.rating || 5),
+      user: {
+        username: r.user?.username || 'TripAdvisor Traveler',
+        avatar: r.user?.avatar_url?.url || undefined,
+      },
+      date: r.publish_ts ? new Date(r.publish_ts).toLocaleDateString() : 'Recent',
+    }))
+  } catch (err) {
+    console.warn('Error fetching TripAdvisor reviews:', err)
+    return []
+  }
 }
