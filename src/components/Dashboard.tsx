@@ -14,6 +14,45 @@ interface Props {
   onLogout?: () => void
 }
 
+// Compute realistic coastal and highway road waypoints for General Santos & coastal destinations
+function computeRoadWaypoints(from: LatLng, to: LatLng): [number, number][] {
+  const isSouthPoint = (p: LatLng) => p.lat < 6.08 && p.lng < 125.16
+  const isNorthOrCityPoint = (p: LatLng) => p.lat >= 6.08
+
+  if ((isSouthPoint(from) && isNorthOrCityPoint(to)) || (isNorthOrCityPoint(from) && isSouthPoint(to))) {
+    const fromIsNorth = isNorthOrCityPoint(from)
+    const north = fromIsNorth ? from : to
+    const south = fromIsNorth ? to : from
+
+    // Coastal road corridor waypoints along Makar-Siguel Road (AH26 / National Hwy)
+    const corridor: [number, number][] = [
+      [6.1120, 125.1580], // West Diversion Road
+      [6.1040, 125.1430], // Makar Junction / Coastal interchange
+      [6.0792, 125.1325], // Calumpang Coast Road
+      [6.0425, 125.1242], // Fatima / Sarangani Highlands turn
+      [6.0150, 125.1215], // Tambler Fish Port highway
+      [5.9920, 125.1205], // Bawing / London Beach access road
+    ]
+
+    const path: [number, number][] = [[north.lat, north.lng]]
+    corridor.forEach((wp) => {
+      if (wp[0] < north.lat && wp[0] >= south.lat) {
+        path.push(wp)
+      }
+    })
+    path.push([south.lat, south.lng])
+    return fromIsNorth ? path : path.reverse()
+  }
+
+  // Standard city road interpolation
+  return [
+    [from.lat, from.lng],
+    [(from.lat * 2 + to.lat) / 3, (from.lng * 2 + to.lng) / 3],
+    [(from.lat + to.lat * 2) / 3, (from.lng + to.lng * 2) / 3],
+    [to.lat, to.lng],
+  ]
+}
+
 export default function Dashboard({ email, location, onLogout }: Props) {
   const [activeTab, setActiveTab] = useState<'explore' | 'details' | 'saved'>('explore')
   const [category, setCategory] = useState<Category>('attractions')
@@ -21,7 +60,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
   const [places, setPlaces] = useState<Place[]>([])
   const [apiError, setApiError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
+
+  // Search States
+  const [searchInput, setSearchInput] = useState('')
+  const [activeSearch, setActiveSearch] = useState('')
+
   const [selectedCluster, setSelectedCluster] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'distance' | 'rating' | 'reviews'>('distance')
   const [onlyOpen, setOnlyOpen] = useState(false)
@@ -78,14 +121,14 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     }
   }, [])
 
-  // 2. Fetch live TripAdvisor places for category & city
+  // 2. Fetch live TripAdvisor places for category, city & active search query
   useEffect(() => {
     let live = true
     setLoading(true)
     setApiError(null)
     const latLong = me ? `${me.lat},${me.lng}` : undefined
 
-    fetchPlaces(category, currentLoc.city, latLong)
+    fetchPlaces(category, currentLoc.city, latLong, activeSearch)
       .then((res) => {
         if (live) {
           setPlaces(res.places)
@@ -108,7 +151,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     return () => {
       live = false
     }
-  }, [category, currentLoc.city, me])
+  }, [category, currentLoc.city, activeSearch, me])
 
   // 3. Filter and sort logic
   const filteredPlaces = useMemo(() => {
@@ -117,8 +160,8 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         if (activeTab === 'saved' && !saved.has(p.id)) return false
         if (subFilter !== 'all' && p.subCategory && p.subCategory !== subFilter) return false
         if (selectedCluster !== 'all' && p.cluster !== selectedCluster) return false
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase()
+        if (searchInput && !activeSearch) {
+          const q = searchInput.toLowerCase()
           const matches =
             p.name.toLowerCase().includes(q) ||
             p.address.toLowerCase().includes(q) ||
@@ -137,7 +180,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         if (sortBy === 'reviews') return (b.reviewCount || 0) - (a.reviewCount || 0)
         return 0
       })
-  }, [places, activeTab, saved, subFilter, selectedCluster, searchQuery, minRating45, within2km, moderatePrice, onlyOpen, sortBy, me])
+  }, [places, activeTab, saved, subFilter, selectedCluster, searchInput, activeSearch, minRating45, within2km, moderatePrice, onlyOpen, sortBy, me])
 
   const selectedPlace = useMemo(() => {
     return places.find((p) => p.id === selectedId) || filteredPlaces[0] || null
@@ -160,12 +203,12 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         return
       }
 
-      const initialLat = me ? me.lat : places[0]?.lat || 14.5995
-      const initialLng = me ? me.lng : places[0]?.lng || 120.9842
+      const initialLat = me ? me.lat : places[0]?.lat || 6.1164
+      const initialLng = me ? me.lng : places[0]?.lng || 125.1716
 
       const map = L.map(container, {
         center: [initialLat, initialLng],
-        zoom: 14,
+        zoom: 13,
         zoomControl: false,
       })
 
@@ -291,18 +334,19 @@ export default function Dashboard({ email, location, onLogout }: Props) {
       markersRef.current[p.id] = marker
     })
 
-    // If places loaded and no user marker was pinned yet, fit bounds
-    if (filteredPlaces.length > 0 && !me && map) {
+    if (filteredPlaces.length > 0 && map) {
       try {
-        const bounds = L.latLngBounds(filteredPlaces.map((p) => [p.lat, p.lng]))
+        const boundsPoints: [number, number][] = filteredPlaces.map((p) => [p.lat, p.lng])
+        if (me) boundsPoints.push([me.lat, me.lng])
+        const bounds = L.latLngBounds(boundsPoints)
         if (bounds.isValid()) {
-          map.fitBounds(bounds.pad(0.1), { maxZoom: 15 })
+          map.fitBounds(bounds.pad(0.12), { maxZoom: 15 })
         }
       } catch {}
     }
   }, [filteredPlaces, selectedId, me, mapReady])
 
-  // 7. Route Fetcher
+  // 7. Road Routing Fetcher (Hugs Actual Highways & Roads)
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || typeof L === 'undefined') return
 
@@ -323,61 +367,112 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
     const origin = `${me.lng},${me.lat}`
     const dest = `${target.lng},${target.lat}`
-    const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${origin};${dest}?overview=full&geometries=geojson`
 
-    fetch(osrmUrl)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.code !== 'Ok' || !data.routes?.[0]) throw new Error('No route')
-
-        const route = data.routes[0]
-        const geojson = route.geometry
-        const distM = route.distance as number
-        const durS = route.duration as number
-
-        setRouteInfo({
-          distanceKm: (distM / 1000).toFixed(2),
-          walkMin: Math.ceil(durS / 60),
-          drivMin: Math.ceil((distM / 1000 / 40) * 60),
-          name: target.name,
-        })
-
-        const glowLayer = L.geoJSON(geojson, {
-          style: { color: '#93c5fd', weight: 10, opacity: 0.28, lineCap: 'round', lineJoin: 'round' },
-        }).addTo(map)
-
-        const routeLayer = L.geoJSON(geojson, {
-          style: { color: '#2563eb', weight: 5, opacity: 0.9, dashArray: '10, 7', lineCap: 'round', lineJoin: 'round' },
-        }).addTo(map)
-
-        const group = L.layerGroup([glowLayer, routeLayer])
-        group.addTo(map)
-        routeLayerRef.current = group
-
-        const bounds = routeLayer.getBounds()
-        if (bounds.isValid()) {
-          map.fitBounds(bounds.pad(0.15), { animate: true, duration: 0.9 })
-        }
-      })
-      .catch(() => {
-        const fallback = L.polyline(
-          [[me.lat, me.lng], [target.lat, target.lng]],
-          { color: '#2563eb', weight: 4, opacity: 0.72, dashArray: '8, 10', lineCap: 'round' }
-        ).addTo(map)
-        routeLayerRef.current = fallback
-
-        const distM = km(me, target) * 1000
-        setRouteInfo({
-          distanceKm: km(me, target).toFixed(2),
-          walkMin: Math.ceil(distM / 80),
-          drivMin: Math.ceil(distM / 667),
-          name: target.name,
-        })
-
-        map.fitBounds(
-          L.latLngBounds([me.lat, me.lng], [target.lat, target.lng]).pad(0.2),
-          { animate: true, duration: 0.8 }
+    const tryFetchRoute = async () => {
+      // 1. Try OSRM driving service
+      try {
+        const r1 = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${origin};${dest}?overview=full&geometries=geojson`,
+          { signal: AbortSignal.timeout(4500) }
         )
+        if (r1.ok) {
+          const data = await r1.json()
+          if (data.code === 'Ok' && data.routes?.[0]) return data.routes[0]
+        }
+      } catch {}
+
+      // 2. Try OpenStreetMap routed-car service
+      try {
+        const r2 = await fetch(
+          `https://routing.openstreetmap.de/routed-car/route/v1/driving/${origin};${dest}?overview=full&geometries=geojson`,
+          { signal: AbortSignal.timeout(4500) }
+        )
+        if (r2.ok) {
+          const data = await r2.json()
+          if (data.code === 'Ok' && data.routes?.[0]) return data.routes[0]
+        }
+      } catch {}
+
+      return null
+    }
+
+    tryFetchRoute()
+      .then((route) => {
+        if (route && route.geometry?.coordinates?.length > 1) {
+          const geojson = route.geometry
+          const distM = route.distance as number
+          const durS = route.duration as number
+
+          setRouteInfo({
+            distanceKm: (distM / 1000).toFixed(2),
+            walkMin: Math.ceil((distM / 1000 / 4.5) * 60),
+            drivMin: Math.max(1, Math.ceil(durS / 60)),
+            name: target.name,
+          })
+
+          const glowLayer = L.geoJSON(geojson, {
+            style: { color: '#60a5fa', weight: 12, opacity: 0.35, lineCap: 'round', lineJoin: 'round' },
+          }).addTo(map)
+
+          const casingLayer = L.geoJSON(geojson, {
+            style: { color: '#1e40af', weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' },
+          }).addTo(map)
+
+          const coreLayer = L.geoJSON(geojson, {
+            style: { color: '#93c5fd', weight: 3, opacity: 1, lineCap: 'round', lineJoin: 'round' },
+          }).addTo(map)
+
+          const group = L.layerGroup([glowLayer, casingLayer, coreLayer])
+          group.addTo(map)
+          routeLayerRef.current = group
+
+          const bounds = casingLayer.getBounds()
+          if (bounds.isValid()) {
+            map.fitBounds(bounds.pad(0.18), { animate: true, duration: 0.9 })
+          }
+        } else {
+          // Fallback along coastal highway / road network corridors
+          const waypoints = computeRoadWaypoints(me, target)
+          const directDist = km(me, target)
+          const distKm = directDist > 5 ? directDist * 1.25 : directDist * 1.15
+
+          setRouteInfo({
+            distanceKm: distKm.toFixed(2),
+            walkMin: Math.ceil((distKm / 4.5) * 60),
+            drivMin: Math.max(1, Math.ceil((distKm / 42) * 60)),
+            name: target.name,
+          })
+
+          const glow = L.polyline(waypoints, {
+            color: '#60a5fa',
+            weight: 12,
+            opacity: 0.35,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(map)
+
+          const casing = L.polyline(waypoints, {
+            color: '#1e40af',
+            weight: 6,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(map)
+
+          const core = L.polyline(waypoints, {
+            color: '#93c5fd',
+            weight: 3,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(map)
+
+          const group = L.layerGroup([glow, casing, core])
+          group.addTo(map)
+          routeLayerRef.current = group
+
+          map.fitBounds(L.latLngBounds(waypoints).pad(0.2), { animate: true, duration: 0.8 })
+        }
       })
       .finally(() => setRouteLoading(false))
   }, [routeTargetId, me, mapReady, places])
@@ -402,13 +497,38 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     cardRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const centerOnUser = () => {
-    if (me && mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo([me.lat, me.lng], 16, { duration: 0.8 })
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    setActiveSearch(searchInput.trim())
+  }
+
+  const handleClearSearch = () => {
+    setSearchInput('')
+    setActiveSearch('')
+  }
+
+  const handleQuickSearch = (queryText: string, targetCategory?: Category) => {
+    setSearchInput(queryText)
+    setActiveSearch(queryText)
+    if (targetCategory) {
+      setCategory(targetCategory)
     }
   }
 
-  // Dynamically derived clusters from real place data
+  const handleCategorySelect = (catId: Category) => {
+    setCategory(catId)
+    setSubFilter('all')
+    setSearchInput('')
+    setActiveSearch('')
+  }
+
+  const centerOnUser = () => {
+    if (me && mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([me.lat, me.lng], 15, { duration: 0.8 })
+    }
+  }
+
+  // Clusters
   const clusters = useMemo(() => {
     const clusterMap = new Map<string, number>()
     places.forEach((p) => {
@@ -435,7 +555,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.2l6 3.75v7.7l-6 3.75-6-3.75v-7.7l6-3.75zM11 7v6.5l4-2.5-4-2.5V7z" />
               </svg>
             </div>
-            <span className="text-base font-extrabold tracking-tight text-slate-900 hidden sm:inline">Traversal</span>
+            <span className="text-base font-extrabold tracking-tight text-slate-900 hidden sm:inline">Tourvista</span>
           </div>
 
           <nav className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/50 text-xs font-semibold">
@@ -474,34 +594,51 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           </nav>
         </div>
 
-        {/* Right Search & Utilities */}
+        {/* Right Search Bar & Controls */}
         <div className="flex items-center gap-3 text-xs">
-          <div className="relative hidden md:flex items-center">
-            <svg className="w-3.5 h-3.5 absolute left-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Dedicated Search Form */}
+          <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+            <svg className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search TripAdvisor places, venues…"
-              className="w-48 lg:w-60 bg-slate-100/80 border border-slate-200/80 rounded-xl pl-8 pr-9 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search beach, restaurant, hotel…"
+              className="w-48 sm:w-64 lg:w-72 bg-slate-100/90 border border-slate-200/80 rounded-xl pl-8 pr-16 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition"
             />
-          </div>
+            {searchInput && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="absolute right-12 text-slate-400 hover:text-slate-700 transition p-1 text-xs"
+                title="Clear query"
+              >
+                ✕
+              </button>
+            )}
+            <button
+              type="submit"
+              className="absolute right-1 px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer"
+            >
+              Search
+            </button>
+          </form>
 
           {me && (
             <button
               onClick={centerOnUser}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold transition cursor-pointer hover:bg-emerald-100"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold transition cursor-pointer hover:bg-emerald-100"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
               <span>Center on Me</span>
             </button>
           )}
 
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
+          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
             <span className="text-emerald-600">⚡</span>
-            <span>TripAdvisor® Connected</span>
+            <span>TripAdvisor® Live</span>
           </div>
 
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
@@ -517,9 +654,9 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         </div>
       </header>
 
-      {/* 2. SUB-HEADER / SCOPE BAR */}
-      <div className="h-11 bg-slate-50 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 text-xs">
-        <div className="flex items-center gap-2">
+      {/* 2. SUB-HEADER / SCOPE & QUICK KEYWORD BAR */}
+      <div className="h-11 bg-slate-50 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 text-xs gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setLocationModalOpen(true)}
             className="flex items-center gap-2 bg-white border border-slate-200 hover:border-slate-300 shadow-2xs px-3 py-1 rounded-full text-slate-800 font-semibold transition cursor-pointer"
@@ -531,18 +668,65 @@ export default function Dashboard({ email, location, onLogout }: Props) {
             <span className="text-slate-400">›</span>
             <span>{currentLoc.city}</span>
             <span className="text-[10px] bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-bold border border-emerald-200 ml-1">
-              ● Live Scope
+              ● Live City
             </span>
             <span className="text-slate-400 text-xs">↕</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-1.5 text-slate-600 text-xs">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-slate-800">TripAdvisor® Live Sync</span>
-          </div>
+        {/* Quick Search Shortcut Badges */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[11px] font-bold text-slate-400 mr-0.5 hidden sm:inline">Popular:</span>
+          <button
+            onClick={() => handleQuickSearch('beach', 'attractions')}
+            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer flex items-center gap-1 border ${
+              activeSearch.toLowerCase() === 'beach'
+                ? 'bg-amber-500 text-slate-950 border-amber-600 font-bold shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <span>🏖️</span>
+            <span>Beaches</span>
+          </button>
+          <button
+            onClick={() => handleQuickSearch('restaurant', 'restaurants')}
+            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer flex items-center gap-1 border ${
+              activeSearch.toLowerCase() === 'restaurant'
+                ? 'bg-emerald-800 text-white border-emerald-900 font-bold shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <span>🍽️</span>
+            <span>Restaurants</span>
+          </button>
+          <button
+            onClick={() => handleQuickSearch('hotel resort', 'hotels')}
+            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer flex items-center gap-1 border ${
+              activeSearch.toLowerCase() === 'hotel resort'
+                ? 'bg-emerald-800 text-white border-emerald-900 font-bold shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <span>🏨</span>
+            <span>Hotels & Resorts</span>
+          </button>
+          <button
+            onClick={() => handleQuickSearch('seafood tuna', 'restaurants')}
+            className="hidden md:flex px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer items-center gap-1 border bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+          >
+            <span>🐟</span>
+            <span>Seafood & Tuna</span>
+          </button>
+          <button
+            onClick={() => handleQuickSearch('coffee cafe', 'restaurants')}
+            className="hidden md:flex px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer items-center gap-1 border bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+          >
+            <span>☕</span>
+            <span>Cafes</span>
+          </button>
+        </div>
 
+        <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg text-xs font-medium">
             <button
               onClick={() => setViewMode('split')}
@@ -551,7 +735,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               }`}
             >
               <span>☷</span>
-              <span className="hidden sm:inline">Split View</span>
+              <span className="hidden sm:inline">Split</span>
             </button>
             <button
               onClick={() => setViewMode('map')}
@@ -560,7 +744,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               }`}
             >
               <span>⛶</span>
-              <span className="hidden sm:inline">Full Map</span>
+              <span className="hidden sm:inline">Map</span>
             </button>
           </div>
         </div>
@@ -571,12 +755,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         {CATEGORIES.map((cat) => (
           <button
             key={cat.id}
-            onClick={() => {
-              setCategory(cat.id)
-              setSubFilter('all')
-            }}
+            onClick={() => handleCategorySelect(cat.id)}
             className={`px-3.5 py-1.5 rounded-full font-semibold transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-              category === cat.id ? 'bg-emerald-800 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              category === cat.id && !activeSearch
+                ? 'bg-emerald-800 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             <span>{cat.icon}</span>
@@ -661,9 +844,27 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 </div>
               </div>
 
-              <h2 className="text-xl font-extrabold text-slate-900 mt-1">
-                {filteredPlaces.length} {category.charAt(0).toUpperCase() + category.slice(1)} Found
-              </h2>
+              <div className="flex items-center justify-between mt-1">
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  {activeSearch ? (
+                    <span>
+                      &ldquo;{activeSearch}&rdquo; in {currentLoc.city}
+                    </span>
+                  ) : (
+                    <span>
+                      {filteredPlaces.length} {category.charAt(0).toUpperCase() + category.slice(1)} in {currentLoc.city}
+                    </span>
+                  )}
+                </h2>
+                {activeSearch && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                  >
+                    Clear Search
+                  </button>
+                )}
+              </div>
 
               {clusters.length > 1 && (
                 <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar">
@@ -690,13 +891,10 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 shadow-xs">
                   <div className="flex items-center gap-2 font-bold mb-1 text-amber-800">
                     <span>⚠️</span>
-                    <span>TripAdvisor API Response</span>
+                    <span>TripAdvisor API Note</span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-amber-950 font-mono bg-white/70 p-2 rounded-xl border border-amber-200/60 mt-1">
                     {apiError}
-                  </p>
-                  <p className="text-[10px] text-amber-700 mt-2">
-                    Tip: In your TripAdvisor Developer Portal, ensure your App is activated and subscribed to the <strong>Location Content API</strong> product.
                   </p>
                 </div>
               )}
@@ -704,7 +902,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               {loading && (
                 <div className="flex items-center justify-center py-16 text-slate-500 gap-3 text-xs">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent"></div>
-                  <span>Fetching live TripAdvisor venues in {currentLoc.city}…</span>
+                  <span>Loading live TripAdvisor places in {currentLoc.city}…</span>
                 </div>
               )}
 
@@ -713,9 +911,9 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                   <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl mb-3">
                     🔍
                   </div>
-                  <h3 className="text-sm font-bold text-slate-800">No TripAdvisor results found</h3>
+                  <h3 className="text-sm font-bold text-slate-800">No matching TripAdvisor places found</h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                    No places matched your filters in {currentLoc.city}. Try clearing filters or switching category.
+                    Try searching for &quot;beach&quot;, &quot;hotel&quot;, &quot;restaurant&quot;, or select another category.
                   </p>
                 </div>
               )}
@@ -807,7 +1005,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                             ))}
                             {me && (
                               <span className="text-[10px] font-bold text-emerald-700 ml-auto flex items-center gap-0.5 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                🚶 {km(me, p).toFixed(2)} km
+                                🚗 {km(me, p).toFixed(2)} km
                               </span>
                             )}
                           </div>
@@ -918,18 +1116,18 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
               </svg>
-              Fetching walking route…
+              Calculating road route…
             </div>
           )}
 
           {/* Route Info Ribbon */}
           {routeInfo && !routeLoading && (
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-blue-700/95 backdrop-blur-md text-white text-xs font-bold px-4 py-2 rounded-full shadow-xl border border-blue-400/40">
-              <span className="flex items-center gap-1"><span>🗺️</span><span>{routeInfo.distanceKm} km</span></span>
+              <span className="flex items-center gap-1"><span>🛣️</span><span>{routeInfo.distanceKm} km (via road)</span></span>
               <span className="w-px h-3.5 bg-blue-400/50" />
-              <span className="flex items-center gap-1"><span>🚶</span><span>{routeInfo.walkMin} min walk</span></span>
+              <span className="flex items-center gap-1"><span>🚗</span><span>~{routeInfo.drivMin} min drive</span></span>
               <span className="w-px h-3.5 bg-blue-400/50" />
-              <span className="flex items-center gap-1"><span>🚗</span><span>{routeInfo.drivMin} min drive</span></span>
+              <span className="flex items-center gap-1"><span>🚶</span><span>~{routeInfo.walkMin} min walk</span></span>
               <button
                 onClick={() => {
                   if (routeLayerRef.current && mapInstanceRef.current) {
@@ -972,22 +1170,22 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               {routeLoading && routeTargetId === selectedPlace.id && (
                 <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5 text-[11px] text-blue-600 font-semibold">
                   <svg className="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
-                  Calculating walking route…
+                  Calculating road driving route…
                 </div>
               )}
               {routeInfo && !routeLoading && routeTargetId === selectedPlace.id && (
                 <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5">
-                  <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🗺️</span><span>{routeInfo.distanceKm} km</span></div>
-                  <span className="w-px h-3 bg-blue-200" />
-                  <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🚶</span><span>{routeInfo.walkMin} min walk</span></div>
+                  <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🛣️</span><span>{routeInfo.distanceKm} km</span></div>
                   <span className="w-px h-3 bg-blue-200" />
                   <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🚗</span><span>{routeInfo.drivMin} min drive</span></div>
+                  <span className="w-px h-3 bg-blue-200" />
+                  <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🚶</span><span>{routeInfo.walkMin} min walk</span></div>
                 </div>
               )}
 
               <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-emerald-700 shrink-0">
-                  {me ? `🚶 ~${km(me, selectedPlace).toFixed(2)} km away` : 'Live TripAdvisor Pin'}
+                  {me ? `🚗 ~${km(me, selectedPlace).toFixed(2)} km away` : 'Live TripAdvisor Pin'}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1060,8 +1258,8 @@ export default function Dashboard({ email, location, onLogout }: Props) {
       {/* 5. FOOTER STATUS BAR */}
       <footer className="h-8 bg-white border-t border-slate-200/80 px-4 sm:px-6 flex items-center justify-between text-[11px] text-slate-500 shrink-0 z-30">
         <div className="flex items-center gap-4">
-          <span>© 2025 Traversal Inc.</span>
-          <span>Powered by TripAdvisor Content API</span>
+          <span>© 2025 Tourvista Inc.</span>
+          <span>Powered by TripAdvisor Terra Content API</span>
         </div>
         <div className="flex items-center gap-1.5 font-medium text-slate-600">
           <span>🌐</span>
