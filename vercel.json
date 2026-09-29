@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/tripadvisor/:path*",
-      "destination": "https://api.content.tripadvisor.com/:path*"
+      "destination": "https://terra.tripadvisor.com/:path*"
     },
     {
       "source": "/(.*)",

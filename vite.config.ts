@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/tripadvisor': {
-        target: 'https://api.content.tripadvisor.com',
+        target: 'https://terra.tripadvisor.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/tripadvisor/, ''),
         headers: {
