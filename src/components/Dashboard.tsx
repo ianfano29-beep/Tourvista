@@ -1382,9 +1382,19 @@ export default function Dashboard({ email, location, onLogout }: Props) {
       {locationModalOpen && (
         <LocationModal
           initial={currentLoc}
+          initialCategory={category}
+          initialSearch={activeSearch}
           onClose={() => setLocationModalOpen(false)}
-          onSelect={(newLoc) => {
+          onSelect={(newLoc, newCategory, query) => {
             setCurrentLoc(newLoc)
+            if (newCategory) setCategory(newCategory)
+            if (query) {
+              setSearchInput(query)
+              setActiveSearch(query)
+            } else {
+              setSearchInput('')
+              setActiveSearch('')
+            }
             setLocationModalOpen(false)
           }}
         />
