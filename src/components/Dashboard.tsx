@@ -16,7 +16,7 @@ interface Props {
 
 export default function Dashboard({ email, location, onLogout }: Props) {
   const [activeTab, setActiveTab] = useState<'explore' | 'details' | 'saved'>('explore')
-  const [category, setCategory] = useState<Category>('restaurants')
+  const [category, setCategory] = useState<Category>('attractions')
   const [subFilter, setSubFilter] = useState<string>('all')
   const [places, setPlaces] = useState<Place[]>([])
   const [apiError, setApiError] = useState<string | null>(null)
