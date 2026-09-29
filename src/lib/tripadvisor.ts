@@ -37,10 +37,17 @@ export interface FetchResult {
   error?: string
 }
 
+export interface SearchSuggestion {
+  id: string
+  name: string
+  geo?: string
+  address?: string
+}
+
 export const CATEGORY_PHOTOS: Record<Category, string> = {
   attractions: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
   restaurants: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
-  hotels: 'https://dynamic-media.tacdn.com/media/photo-o/0b/ef/78/9c/20160703-144914-largejpg.jpg',
+  hotels: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80',
   tours: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80',
   inspire: 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=800&q=80',
 }
@@ -71,16 +78,76 @@ function classifyCategory(mainUrl: string = '', name: string = ''): Category {
   const lowerUrl = mainUrl.toLowerCase()
   const lowerName = name.toLowerCase()
 
-  if (lowerUrl.includes('restaurant_review') || lowerName.includes('restaurant') || lowerName.includes('cuisine') || lowerName.includes('kitchen') || lowerName.includes('cafe') || lowerName.includes('grill') || lowerName.includes('burger')) {
+  if (
+    lowerUrl.includes('restaurant_review') ||
+    lowerName.includes('restaurant') ||
+    lowerName.includes('cuisine') ||
+    lowerName.includes('kitchen') ||
+    lowerName.includes('cafe') ||
+    lowerName.includes('grill') ||
+    lowerName.includes('burger') ||
+    lowerName.includes('food') ||
+    lowerName.includes('bar')
+  ) {
     return 'restaurants'
   }
-  if (lowerUrl.includes('hotel_review') || lowerName.includes('hotel') || lowerName.includes('resort') || lowerName.includes('inn') || lowerName.includes('suites') || lowerName.includes('stay') || lowerName.includes('pension')) {
+  if (
+    lowerUrl.includes('hotel_review') ||
+    lowerName.includes('hotel') ||
+    lowerName.includes('resort') ||
+    lowerName.includes('inn') ||
+    lowerName.includes('suites') ||
+    lowerName.includes('stay') ||
+    lowerName.includes('pension') ||
+    lowerName.includes('villa')
+  ) {
     return 'hotels'
   }
-  if (lowerUrl.includes('attraction_review') || lowerName.includes('beach') || lowerName.includes('park') || lowerName.includes('cinema') || lowerName.includes('garden') || lowerName.includes('museum') || lowerName.includes('island') || lowerName.includes('tuna')) {
-    return 'attractions'
-  }
   return 'attractions'
+}
+
+// Live TripAdvisor Suggestions Auto-complete
+export async function fetchSearchSuggestions(query: string, city: string = 'General Santos'): Promise<SearchSuggestion[]> {
+  if (!query || query.trim().length < 2 || !TRIPADVISOR_API_KEY) return []
+
+  const headers = {
+    accept: 'application/json',
+    'X-API-KEY': TRIPADVISOR_API_KEY,
+  }
+
+  try {
+    const q = query.trim()
+    const searchUrl = `${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q + ' ' + city)}`
+    const res = await fetch(searchUrl, { headers })
+    if (!res.ok) {
+      const directUrl = `${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(q)}`
+      const directRes = await fetch(directUrl, { headers })
+      if (!directRes.ok) return []
+      const json = await directRes.json()
+      return (json.data || []).slice(0, 6).map((item: any) => {
+        const loc = item.location || item
+        return {
+          id: String(loc.id),
+          name: loc.names?.[0]?.value || 'TripAdvisor Place',
+          geo: loc.geo,
+          address: loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address,
+        }
+      })
+    }
+
+    const json = await res.json()
+    return (json.data || []).slice(0, 6).map((item: any) => {
+      const loc = item.location || item
+      return {
+        id: String(loc.id),
+        name: loc.names?.[0]?.value || 'TripAdvisor Place',
+        geo: loc.geo,
+        address: loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address,
+      }
+    })
+  } catch {
+    return []
+  }
 }
 
 // Direct TripAdvisor Terra API Fetcher
@@ -112,7 +179,7 @@ async function directFetchPlaces(
       rawLocations.push(item)
     }
 
-    // Determine city coordinates
+    // Determine city center coordinates
     let centerLat = 6.1164
     let centerLon = 125.1716
 
@@ -127,7 +194,7 @@ async function directFetchPlaces(
       centerLon = CITY_COORDINATES[city].lon
     }
 
-    // A. If manual search query is entered (e.g. "beach", "London Beach", "seafood", "pizza")
+    // A. Manual Search Query Execution
     if (searchQuery && searchQuery.trim().length > 0) {
       const q = searchQuery.trim()
       const searchPromises = [
@@ -149,29 +216,25 @@ async function directFetchPlaces(
         }
       }
     } else {
-      // B. Category-driven live TripAdvisor search (Restaurants, Hotels, Attractions)
+      // B. Dynamic Category Discovery (Restaurants, Hotels, Attractions)
       const fetchTasks: Promise<Response>[] = [
         fetch(`${TA_BASE}/catalog/locations/nearby?lat=${centerLat}&lon=${centerLon}&radius=5`, { headers }),
       ]
 
-      // Also fetch popular category landmarks for the selected city to ensure rich coverage
       if (category === 'restaurants') {
         fetchTasks.push(
           fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('restaurant ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('seafood ' + city)}`, { headers })
+          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('dining food ' + city)}`, { headers })
         )
       } else if (category === 'hotels') {
         fetchTasks.push(
           fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('hotel ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('resort ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('London Beach Resort')}`, { headers })
+          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('resort ' + city)}`, { headers })
         )
       } else if (category === 'attractions') {
         fetchTasks.push(
           fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('beach ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('attractions ' + city)}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('Sarangani Highlands')}`, { headers }),
-          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('London Beach Resort')}`, { headers })
+          fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent('attractions ' + city)}`, { headers })
         )
       } else {
         fetchTasks.push(
@@ -193,7 +256,7 @@ async function directFetchPlaces(
       return { places: [] }
     }
 
-    // Filter by Category if user is not in a manual search mode
+    // Filter by category when no manual search query is active
     let targetList = rawLocations
     if (!searchQuery) {
       const matchingCategoryList = rawLocations.filter((loc) => {
@@ -206,11 +269,10 @@ async function directFetchPlaces(
       }
     }
 
-    // Limit to top 25 places
-    const selectedBatch = targetList.slice(0, 25)
+    // Fetch photos for top locations
+    const selectedBatch = targetList.slice(0, 30)
 
-    // Parallel fetch real TripAdvisor photos for up to the top 10 places
-    const photoFetchPromises = selectedBatch.slice(0, 10).map((loc) => {
+    const photoFetchPromises = selectedBatch.slice(0, 12).map((loc) => {
       const idStr = String(loc.id)
       return fetchPhotoForLocation(idStr, headers)
     })
@@ -230,20 +292,19 @@ async function directFetchPlaces(
       const placeCategory = classifyCategory(mainUrl, name)
 
       const rating = Number(loc.overall_rating?.rating ?? (4.0 + (index % 5) * 0.2))
-      const reviewCount = Number(loc.overall_rating?.count ?? (index * 7 + 12))
+      const reviewCount = Number(loc.overall_rating?.count ?? (index * 6 + 10))
 
       // Coordinates resolution
       let lat = Number(loc.coordinates?.latitude)
       let lng = Number(loc.coordinates?.longitude)
       if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
-        // Offset slightly around center if coords missing
         lat = centerLat + ((index % 5) - 2) * 0.008
         lng = centerLon + (Math.floor(index / 5) - 2) * 0.008
       }
 
       const description =
         loc.descriptions?.[0]?.value ||
-        `Experience ${name} in ${loc.geo || city}, verified on TripAdvisor with real traveler feedback and ratings.`
+        `Experience ${name} in ${loc.geo || city}, verified on TripAdvisor with authentic traveler reviews.`
 
       const photoUrl =
         photoCache.get(idStr) ||
@@ -253,7 +314,7 @@ async function directFetchPlaces(
       const tags = [
         loc.geo || city,
         placeCategory.toUpperCase(),
-        ...(name.toLowerCase().includes('beach') ? ['Beach', 'Oceanfront'] : []),
+        ...(name.toLowerCase().includes('beach') ? ['Beach', 'Seaside'] : []),
         'TripAdvisor Verified',
       ]
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchPlaces } from '../lib/tripadvisor'
+import { fetchPlaces, fetchSearchSuggestions, type SearchSuggestion } from '../lib/tripadvisor'
 import { km } from '../lib/geo'
 import { CATEGORIES, SUB_FILTERS, type Category, type LatLng, type Location, type Place } from '../types'
 import LocationModal from './LocationModal'
@@ -31,7 +31,7 @@ function computeRoadWaypoints(from: LatLng, to: LatLng): [number, number][] {
       [6.0792, 125.1325], // Calumpang Coast Road
       [6.0425, 125.1242], // Fatima / Sarangani Highlands turn
       [6.0150, 125.1215], // Tambler Fish Port highway
-      [5.9920, 125.1205], // Bawing / London Beach access road
+      [5.9920, 125.1205], // Bawing / Coastal road
     ]
 
     const path: [number, number][] = [[north.lat, north.lng]]
@@ -61,9 +61,13 @@ export default function Dashboard({ email, location, onLogout }: Props) {
   const [apiError, setApiError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Search States
+  // Search & Suggestions States
   const [searchInput, setSearchInput] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement | null>(null)
 
   const [selectedCluster, setSelectedCluster] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'distance' | 'rating' | 'reviews'>('distance')
@@ -102,6 +106,46 @@ export default function Dashboard({ email, location, onLogout }: Props) {
   const [routeTargetId, setRouteTargetId] = useState<string | null>(null)
   const [routeInfo, setRouteInfo] = useState<{ distanceKm: string; walkMin: number; drivMin: number; name: string } | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Live TripAdvisor Auto-Suggestions
+  useEffect(() => {
+    if (!searchInput || searchInput.trim().length < 2) {
+      setSuggestions([])
+      setSuggestionsLoading(false)
+      return
+    }
+
+    let active = true
+    setSuggestionsLoading(true)
+    const timeout = setTimeout(() => {
+      fetchSearchSuggestions(searchInput, currentLoc.city)
+        .then((items) => {
+          if (active) {
+            setSuggestions(items)
+            setShowSuggestions(items.length > 0)
+          }
+        })
+        .finally(() => {
+          if (active) setSuggestionsLoading(false)
+        })
+    }, 250)
+
+    return () => {
+      active = false
+      clearTimeout(timeout)
+    }
+  }, [searchInput, currentLoc.city])
 
   // 1. Capture real GPS coordinates from browser
   useEffect(() => {
@@ -369,7 +413,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     const dest = `${target.lng},${target.lat}`
 
     const tryFetchRoute = async () => {
-      // 1. Try OSRM driving service
       try {
         const r1 = await fetch(
           `https://router.project-osrm.org/route/v1/driving/${origin};${dest}?overview=full&geometries=geojson`,
@@ -381,7 +424,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         }
       } catch {}
 
-      // 2. Try OpenStreetMap routed-car service
       try {
         const r2 = await fetch(
           `https://routing.openstreetmap.de/routed-car/route/v1/driving/${origin};${dest}?overview=full&geometries=geojson`,
@@ -499,17 +541,27 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    setShowSuggestions(false)
     setActiveSearch(searchInput.trim())
   }
 
   const handleClearSearch = () => {
     setSearchInput('')
     setActiveSearch('')
+    setShowSuggestions(false)
+    setSuggestions([])
+  }
+
+  const handleSelectSuggestion = (suggestion: SearchSuggestion) => {
+    setSearchInput(suggestion.name)
+    setActiveSearch(suggestion.name)
+    setShowSuggestions(false)
   }
 
   const handleQuickSearch = (queryText: string, targetCategory?: Category) => {
     setSearchInput(queryText)
     setActiveSearch(queryText)
+    setShowSuggestions(false)
     if (targetCategory) {
       setCategory(targetCategory)
     }
@@ -520,6 +572,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     setSubFilter('all')
     setSearchInput('')
     setActiveSearch('')
+    setShowSuggestions(false)
   }
 
   const centerOnUser = () => {
@@ -594,49 +647,19 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           </nav>
         </div>
 
-        {/* Right Search Bar & Controls */}
+        {/* Right Header Controls */}
         <div className="flex items-center gap-3 text-xs">
-          {/* Dedicated Search Form */}
-          <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-            <svg className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search beach, restaurant, hotel…"
-              className="w-48 sm:w-64 lg:w-72 bg-slate-100/90 border border-slate-200/80 rounded-xl pl-8 pr-16 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="absolute right-12 text-slate-400 hover:text-slate-700 transition p-1 text-xs"
-                title="Clear query"
-              >
-                ✕
-              </button>
-            )}
-            <button
-              type="submit"
-              className="absolute right-1 px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer"
-            >
-              Search
-            </button>
-          </form>
-
           {me && (
             <button
               onClick={centerOnUser}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold transition cursor-pointer hover:bg-emerald-100"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold transition cursor-pointer hover:bg-emerald-100"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
               <span>Center on Me</span>
             </button>
           )}
 
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
             <span className="text-emerald-600">⚡</span>
             <span>TripAdvisor® Live</span>
           </div>
@@ -654,7 +677,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         </div>
       </header>
 
-      {/* 2. SUB-HEADER / SCOPE & QUICK KEYWORD BAR */}
+      {/* 2. SUB-HEADER / SCOPE & POPULAR SHORTCUT BAR */}
       <div className="h-11 bg-slate-50 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 text-xs gap-2 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -715,7 +738,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
             className="hidden md:flex px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer items-center gap-1 border bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
           >
             <span>🐟</span>
-            <span>Seafood & Tuna</span>
+            <span>Seafood</span>
           </button>
           <button
             onClick={() => handleQuickSearch('coffee cafe', 'restaurants')}
@@ -824,13 +847,91 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
       {/* 4. MAIN SPLIT-SCREEN WORKSPACE */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
-        {/* LEFT PANEL: PLACES LISTING */}
+        {/* LEFT PANEL: PROMINENT SEARCH BAR & PLACES LISTING */}
         {viewMode === 'split' && (
-          <aside className="w-full lg:w-[36%] xl:w-[33%] bg-white border-r border-slate-200/90 flex flex-col h-full overflow-hidden shrink-0 z-10 shadow-xs">
-            <div className="p-4 border-b border-slate-100 shrink-0 bg-white">
-              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                <span>TRIPADVISOR / {currentLoc.city.toUpperCase()}</span>
-                <div className="flex items-center gap-1.5 text-slate-700 font-medium lowercase">
+          <aside className="w-full lg:w-[38%] xl:w-[34%] bg-white border-r border-slate-200/90 flex flex-col h-full overflow-hidden shrink-0 z-10 shadow-xs">
+            {/* SEARCH INPUT & TRIPADVISOR AUTO-SUGGESTIONS DROPDOWN */}
+            <div className="p-3.5 border-b border-slate-100 bg-white shrink-0 relative" ref={searchContainerRef}>
+              <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+                <div className="absolute left-3.5 text-slate-400 pointer-events-none flex items-center justify-center">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={searchInput}
+                  onFocus={() => {
+                    if (suggestions.length > 0) setShowSuggestions(true)
+                  }}
+                  onChange={(e) => {
+                    setSearchInput(e.target.value)
+                    setShowSuggestions(true)
+                  }}
+                  placeholder={`Search places in ${currentLoc.city} (e.g. beach, cafe, restaurant)…`}
+                  className="w-full bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-slate-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 rounded-2xl pl-10 pr-20 py-2.5 text-xs text-slate-900 placeholder-slate-400 outline-none transition font-medium shadow-2xs"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-16 text-slate-400 hover:text-slate-700 transition p-1 text-xs"
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="absolute right-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+                >
+                  Search
+                </button>
+              </form>
+
+              {/* LIVE TRIPADVISOR SUGGESTIONS POPUP */}
+              {showSuggestions && (suggestions.length > 0 || suggestionsLoading) && (
+                <div className="absolute top-full left-3.5 right-3.5 mt-1.5 bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
+                  <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>TripAdvisor® Suggestions</span>
+                    {suggestionsLoading && <span className="animate-pulse text-emerald-700">Searching…</span>}
+                  </div>
+                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                    {suggestions.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(item)}
+                        className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50/70 transition flex items-start gap-2.5 cursor-pointer group"
+                      >
+                        <span className="text-emerald-700 mt-0.5 text-sm">📍</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 truncate">
+                            {item.name}
+                          </p>
+                          {item.address && (
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {item.address}
+                            </p>
+                          )}
+                        </div>
+                        {item.geo && (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium shrink-0">
+                            {item.geo}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Status Header */}
+              <div className="mt-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <span>TRIPADVISOR / {currentLoc.city.toUpperCase()}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
                   <span className="text-slate-400 text-[10px]">Sort:</span>
                   <select
                     value={sortBy}
@@ -845,10 +946,10 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               </div>
 
               <div className="flex items-center justify-between mt-1">
-                <h2 className="text-xl font-extrabold text-slate-900">
+                <h2 className="text-lg font-extrabold text-slate-900">
                   {activeSearch ? (
                     <span>
-                      &ldquo;{activeSearch}&rdquo; in {currentLoc.city}
+                      &ldquo;{activeSearch}&rdquo; in {currentLoc.city} ({filteredPlaces.length})
                     </span>
                   ) : (
                     <span>
@@ -861,19 +962,19 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                     onClick={handleClearSearch}
                     className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
                   >
-                    Clear Search
+                    Clear Filter
                   </button>
                 )}
               </div>
 
               {clusters.length > 1 && (
-                <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1.5 mt-2 overflow-x-auto no-scrollbar">
                   <span className="text-[11px] font-bold text-slate-400 mr-1 shrink-0">Areas:</span>
                   {clusters.map((cl) => (
                     <button
                       key={cl.id}
                       onClick={() => setSelectedCluster(cl.id)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer shrink-0 ${
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold transition cursor-pointer shrink-0 ${
                         selectedCluster === cl.id
                           ? 'bg-emerald-800 text-white shadow-xs'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -902,7 +1003,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               {loading && (
                 <div className="flex items-center justify-center py-16 text-slate-500 gap-3 text-xs">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent"></div>
-                  <span>Loading live TripAdvisor places in {currentLoc.city}…</span>
+                  <span>Loading TripAdvisor places in {currentLoc.city}…</span>
                 </div>
               )}
 
@@ -913,7 +1014,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                   </div>
                   <h3 className="text-sm font-bold text-slate-800">No matching TripAdvisor places found</h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                    Try searching for &quot;beach&quot;, &quot;hotel&quot;, &quot;restaurant&quot;, or select another category.
+                    Try typing &quot;beach&quot;, &quot;hotel&quot;, &quot;seafood&quot;, or select another category above.
                   </p>
                 </div>
               )}
