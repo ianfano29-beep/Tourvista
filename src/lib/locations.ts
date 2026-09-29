@@ -71,6 +71,6 @@ export const LOCATIONS: Record<string, Record<string, string[]>> = {
 
 export const DEFAULT_LOCATION: Location = {
   country: 'Philippines',
-  region: 'Metro Manila (NCR)',
-  city: 'Makati',
+  region: 'Region XII — SOCCSKSARGEN',
+  city: 'General Santos',
 }

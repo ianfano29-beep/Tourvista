@@ -51,18 +51,22 @@ export default function PlaceModal({ place, me, saved, onSave, onClose }: Props)
 
           <div className="absolute bottom-4 left-5 right-5 text-white">
             <div className="flex items-center gap-2 mb-1">
-              <span className="rounded bg-emerald-800 px-2 py-0.5 text-xs font-bold shadow">
-                ★ {place.rating.toFixed(1)}
-              </span>
+              {place.rating > 0 && (
+                <span className="rounded bg-emerald-800 px-2 py-0.5 text-xs font-bold shadow">
+                  ★ {place.rating.toFixed(1)}
+                </span>
+              )}
               <span className="text-xs text-slate-200">
-                ({(place.reviewCount || 3200).toLocaleString()} reviews on TripAdvisor)
+                {place.reviewCount ? `(${place.reviewCount.toLocaleString()} reviews on TripAdvisor)` : '(TripAdvisor)'}
               </span>
-              <span className="rounded bg-white/20 backdrop-blur-xs px-2 py-0.5 text-xs font-bold text-white ml-auto">
-                {place.price || '€€'}
-              </span>
+              {place.price && (
+                <span className="rounded bg-white/20 backdrop-blur-xs px-2 py-0.5 text-xs font-bold text-white ml-auto">
+                  {place.price}
+                </span>
+              )}
             </div>
             <h2 className="text-2xl font-black tracking-tight leading-tight">{place.name}</h2>
-            <p className="text-xs text-slate-300 mt-0.5">📍 {place.address}</p>
+            {place.address && <p className="text-xs text-slate-300 mt-0.5">📍 {place.address}</p>}
           </div>
         </div>
 
@@ -88,23 +92,27 @@ export default function PlaceModal({ place, me, saved, onSave, onClose }: Props)
             >
               ▲ Open Directions
             </a>
-            <a
-              href={place.url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition ml-auto"
-            >
-              TripAdvisor Page ↗
-            </a>
+            {place.url && (
+              <a
+                href={place.url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition ml-auto"
+              >
+                TripAdvisor Page ↗
+              </a>
+            )}
           </div>
 
           {/* Description & Attributes */}
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Overview</h3>
-            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-              {place.description || 'Authentic top-rated destination offering unforgettable local experiences and exceptional hospitality.'}
-            </p>
-          </div>
+          {place.description && (
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Overview</h3>
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                {place.description}
+              </p>
+            </div>
+          )}
 
           {/* Tags */}
           {place.tags && place.tags.length > 0 && (
@@ -129,17 +137,17 @@ export default function PlaceModal({ place, me, saved, onSave, onClose }: Props)
           <div className="pt-2">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                <span>★ Verified Traveler Reviews</span>
+                <span>★ Verified TripAdvisor Reviews</span>
               </h3>
               <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
-                TripAdvisor Verified
+                Live TripAdvisor API
               </span>
             </div>
 
             {loadingReviews ? (
               <p className="text-xs text-slate-500 py-3">Loading authentic traveler reviews…</p>
             ) : reviews.length === 0 ? (
-              <p className="text-xs text-slate-500">No written reviews yet. Be the first to share your thoughts!</p>
+              <p className="text-xs text-slate-500">No written reviews found on TripAdvisor for this location.</p>
             ) : (
               <div className="space-y-3">
                 {reviews.map((r) => (
@@ -157,8 +165,9 @@ export default function PlaceModal({ place, me, saved, onSave, onClose }: Props)
                       </div>
                       <span className="font-bold text-amber-600">★ {r.rating}.0</span>
                     </div>
-                    <p className="font-semibold text-slate-800 mt-1">{r.title}</p>
+                    {r.title && <p className="font-semibold text-slate-800 mt-1">{r.title}</p>}
                     <p className="text-slate-600 mt-0.5 leading-relaxed">{r.text}</p>
+                    {r.date && <span className="text-[10px] text-slate-400 mt-1 block">{r.date}</span>}
                   </div>
                 ))}
               </div>

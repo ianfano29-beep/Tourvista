@@ -15,10 +15,11 @@ interface Props {
 }
 
 export default function Dashboard({ email, location, onLogout }: Props) {
-  const [activeTab, setActiveTab] = useState<'explore' | 'details' | 'planner' | 'saved'>('explore')
+  const [activeTab, setActiveTab] = useState<'explore' | 'details' | 'saved'>('explore')
   const [category, setCategory] = useState<Category>('restaurants')
   const [subFilter, setSubFilter] = useState<string>('all')
   const [places, setPlaces] = useState<Place[]>([])
+  const [apiError, setApiError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCluster, setSelectedCluster] = useState<string>('all')
@@ -38,13 +39,12 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
   // Real User Geolocation & Saved Places
   const [me, setMe] = useState<LatLng | null>(null)
-  const [geoStatus, setGeoStatus] = useState<'locating' | 'ready' | 'denied'>('locating')
   const [saved, setSaved] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('wander_saved_ids')
-      return stored ? new Set(JSON.parse(stored)) : new Set(['nearby-user-rest-1', 'rome-rest-1'])
+      return stored ? new Set(JSON.parse(stored)) : new Set()
     } catch {
-      return new Set(['nearby-user-rest-1', 'rome-rest-1'])
+      return new Set()
     }
   })
 
@@ -56,7 +56,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
   const userMarkerRef = useRef<any>(null)
   const routeLayerRef = useRef<any>(null)
   const [mapReady, setMapReady] = useState(false)
-  // routeTargetId: only set when user explicitly clicks "Show Route" — never auto-set
   const [routeTargetId, setRouteTargetId] = useState<string | null>(null)
   const [routeInfo, setRouteInfo] = useState<{ distanceKm: string; walkMin: number; drivMin: number; name: string } | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
@@ -70,108 +69,38 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           const userLng = position.coords.longitude
           const userCoords: LatLng = { lat: userLat, lng: userLng }
           setMe(userCoords)
-          setGeoStatus('ready')
-
-          // Create restaurants directly adjacent to user's GPS
-          const nearbyRestaurants: Place[] = [
-            {
-              id: 'nearby-user-rest-1',
-              rank: 1,
-              name: 'La Bottega Gourmet & Grill (Near You)',
-              category: 'restaurants',
-              subCategory: 'trattorias',
-              rating: 4.9,
-              reviewCount: 2340,
-              price: '€€',
-              cluster: 'Near Your Location',
-              address: `Located 200m from your GPS (${userLat.toFixed(4)}, ${userLng.toFixed(4)})`,
-              description: 'Top-rated culinary destination featuring fresh local specialties, wood-fired artisanal dishes, and handcrafted pasta.',
-              photo: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
-              url: `https://www.google.com/maps/search/restaurants/@${userLat},${userLng},16z`,
-              lat: userLat + 0.0018,
-              lng: userLng + 0.0015,
-              openStatus: 'Open Now · Closes 23:00',
-              michelin: true,
-              tags: ['#1 Top Pick Near You', 'Chef Special', 'Handmade Fresh'],
-            },
-            {
-              id: 'nearby-user-rest-2',
-              rank: 2,
-              name: 'Artisan Trattoria & Pizzeria (Near You)',
-              category: 'restaurants',
-              subCategory: 'pizzerias',
-              rating: 4.8,
-              reviewCount: 1680,
-              price: '€€',
-              cluster: 'Near Your Location',
-              address: `Located 380m from your GPS (${userLat.toFixed(4)}, ${userLng.toFixed(4)})`,
-              description: 'Authentic stone oven pizzas with blistered crusts, imported buffalo mozzarella, and signature aperitivos.',
-              photo: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80',
-              url: `https://www.google.com/maps/search/pizza/@${userLat},${userLng},16z`,
-              lat: userLat - 0.0022,
-              lng: userLng + 0.0028,
-              openStatus: 'Open Now · Closes 00:00',
-              tags: ['Stone Oven Pizza', 'Craft Beer', 'Cozy Patio'],
-            },
-            {
-              id: 'nearby-user-rest-3',
-              rank: 3,
-              name: 'The Cozy Bistro & Wine Vault (Near You)',
-              category: 'restaurants',
-              subCategory: 'wine_bars',
-              rating: 4.7,
-              reviewCount: 920,
-              price: '€€€',
-              cluster: 'Near Your Location',
-              address: `Located 520m from your GPS (${userLat.toFixed(4)}, ${userLng.toFixed(4)})`,
-              description: 'Curated wine selections, artisan charcuterie boards, and decadent handmade desserts in a relaxed ambiance.',
-              photo: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80',
-              url: `https://www.google.com/maps/search/restaurants/@${userLat},${userLng},16z`,
-              lat: userLat + 0.0035,
-              lng: userLng - 0.0024,
-              openStatus: 'Open Now · Closes 23:30',
-              tags: ['Wine Selection', 'Gourmet Tapas', 'Live Music'],
-            },
-          ]
-
-          setPlaces((prev) => {
-            const nonNearby = prev.filter((p) => !p.id.startsWith('nearby-user-rest-'))
-            return [...nearbyRestaurants, ...nonNearby]
-          })
-          setSelectedId('nearby-user-rest-1')
         },
         (error) => {
           console.warn('Geolocation access denied or unavailable:', error)
-          setGeoStatus('denied')
-          const fallbackCoords = { lat: 41.8905, lng: 12.4820 }
-          setMe(fallbackCoords)
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       )
-    } else {
-      setGeoStatus('denied')
-      setMe({ lat: 41.8905, lng: 12.4820 })
     }
   }, [])
 
-  // 2. Fetch places for category & city
+  // 2. Fetch live TripAdvisor places for category & city
   useEffect(() => {
     let live = true
     setLoading(true)
-    fetchPlaces(category, currentLoc.city)
+    setApiError(null)
+    const latLong = me ? `${me.lat},${me.lng}` : undefined
+
+    fetchPlaces(category, currentLoc.city, latLong)
       .then((res) => {
         if (live) {
-          setPlaces((prev) => {
-            const userNearby = prev.filter((p) => p.id.startsWith('nearby-user-rest-'))
-            if (userNearby.length > 0) {
-              return [...userNearby, ...res.filter((p) => !p.id.startsWith('nearby-user-rest-'))]
-            }
-            return res
-          })
-          if (res.length > 0 && !selectedId) {
-            setSelectedId(res[0].id)
+          setPlaces(res.places)
+          if (res.error) {
+            setApiError(res.error)
+          }
+          if (res.places.length > 0) {
+            setSelectedId((prev) => (prev && res.places.some((p) => p.id === prev) ? prev : res.places[0].id))
+          } else {
+            setSelectedId(null)
           }
         }
+      })
+      .catch((err) => {
+        if (live) setApiError(err?.message || 'Error fetching data')
       })
       .finally(() => {
         if (live) setLoading(false)
@@ -179,7 +108,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     return () => {
       live = false
     }
-  }, [category, currentLoc.city])
+  }, [category, currentLoc.city, me])
 
   // 3. Filter and sort logic
   const filteredPlaces = useMemo(() => {
@@ -198,8 +127,8 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         }
         if (minRating45 && p.rating < 4.5) return false
         if (within2km && me && km(me, p) > 2.0) return false
-        if (moderatePrice && p.price !== '€€' && p.price !== '₱₱' && p.price !== '¥¥') return false
-        if (onlyOpen && p.openStatus && p.openStatus.includes('Closed')) return false
+        if (moderatePrice && p.price && !p.price.includes('$$') && !p.price.includes('€€') && !p.price.includes('₱₱')) return false
+        if (onlyOpen && p.openStatus && p.openStatus.toLowerCase().includes('closed')) return false
         return true
       })
       .sort((a, b) => {
@@ -211,20 +140,18 @@ export default function Dashboard({ email, location, onLogout }: Props) {
   }, [places, activeTab, saved, subFilter, selectedCluster, searchQuery, minRating45, within2km, moderatePrice, onlyOpen, sortBy, me])
 
   const selectedPlace = useMemo(() => {
-    return places.find((p) => p.id === selectedId) || filteredPlaces[0] || places[0]
+    return places.find((p) => p.id === selectedId) || filteredPlaces[0] || null
   }, [places, selectedId, filteredPlaces])
 
-  // 4. Initialize Leaflet with Google Maps Tiles (Zero API Key needed)
-  // Retry until both the DOM container AND Leaflet CDN are available
+  // 4. Initialize Leaflet Map
   useEffect(() => {
     let retries = 0
-    const MAX_RETRIES = 40 // up to 4 seconds
+    const MAX_RETRIES = 40
 
     const tryInit = () => {
-      if (mapInstanceRef.current) return // already initialized
+      if (mapInstanceRef.current) return
 
       const container = mapContainerRef.current
-      // Check if Leaflet is loaded and container has real dimensions
       if (!container || typeof L === 'undefined' || container.offsetWidth === 0) {
         retries++
         if (retries < MAX_RETRIES) {
@@ -233,13 +160,15 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         return
       }
 
+      const initialLat = me ? me.lat : places[0]?.lat || 14.5995
+      const initialLng = me ? me.lng : places[0]?.lng || 120.9842
+
       const map = L.map(container, {
-        center: [14.5995, 120.9842], // Default: Manila (will be overridden by GPS)
-        zoom: 15,
+        center: [initialLat, initialLng],
+        zoom: 14,
         zoomControl: false,
       })
 
-      // Google Maps Standard Roadmap Layer
       const googleStandard = L.tileLayer(
         'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
         {
@@ -252,18 +181,13 @@ export default function Dashboard({ email, location, onLogout }: Props) {
       googleStandard.addTo(map)
       tileLayerRef.current = googleStandard
       mapInstanceRef.current = map
-      setMapReady(true) // ← trigger marker effects
+      setMapReady(true)
     }
 
-    // Use requestAnimationFrame to ensure DOM is painted first
     requestAnimationFrame(() => tryInit())
-
-    return () => {
-      // Keep map alive for smooth navigation
-    }
   }, [])
 
-  // 5. Update Google Maps Tile Layer when mapLayer changes
+  // 5. Update Map Layer
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || typeof L === 'undefined') return
 
@@ -271,11 +195,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
       mapInstanceRef.current.removeLayer(tileLayerRef.current)
     }
 
-    let url = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}' // Standard
+    let url = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
     if (mapLayer === 'satellite') {
-      url = 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}' // Google Hybrid Satellite + Roads
+      url = 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
     } else if (mapLayer === 'terrain') {
-      url = 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}' // Google Terrain + Roads
+      url = 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}'
     }
 
     const newLayer = L.tileLayer(url, {
@@ -288,21 +212,18 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     tileLayerRef.current = newLayer
   }, [mapLayer, mapReady])
 
-  // 6. Plot / Update User Location Marker & Restaurant Markers on Google Map
-  // Depends on mapReady so it never runs before Leaflet is initialized
+  // 6. Plot Place & User Markers
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || typeof L === 'undefined') return
 
     const map = mapInstanceRef.current
 
-    // ── User Location Marker (blue pulsing dot) ──────────────────────────────
     if (me) {
       if (userMarkerRef.current) {
         userMarkerRef.current.setLatLng([me.lat, me.lng])
       } else {
-        // Use inline styles — Tailwind classes don't work inside Leaflet DOM
         const userIcon = L.divIcon({
-          className: '', // must be empty string to avoid Leaflet's default white box
+          className: '',
           html: `
             <div style="position:relative;display:flex;align-items:center;justify-content:center;width:36px;height:36px">
               <div style="position:absolute;width:36px;height:36px;border-radius:50%;background:rgba(59,130,246,0.35);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite"></div>
@@ -323,43 +244,35 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           </div>
         `)
         userMarkerRef.current = marker
-
-        // Pan to user location once they are located
-        map.flyTo([me.lat, me.lng], 16, { duration: 1.2 })
       }
     }
 
-    // ── Clear old place markers ───────────────────────────────────────────────
     Object.values(markersRef.current).forEach((m: any) => map.removeLayer(m))
     markersRef.current = {}
 
-    // ── Place Markers with inline styles (no Tailwind inside Leaflet) ─────────
     filteredPlaces.forEach((p) => {
       const isSelected = p.id === selectedId
-      const isNearbyGPS = p.id.startsWith('nearby-user-rest-')
-
-      const bgColor = isSelected ? '#f59e0b' : isNearbyGPS ? '#059669' : '#064e3b'
+      const bgColor = isSelected ? '#f59e0b' : '#064e3b'
       const textColor = isSelected ? '#1c1917' : '#ffffff'
-      const arrowColor = isSelected ? '#f59e0b' : isNearbyGPS ? '#059669' : '#064e3b'
-      const scale = isSelected ? 'scale(1.3)' : 'scale(1)'
+      const arrowColor = isSelected ? '#f59e0b' : '#064e3b'
+      const scale = isSelected ? 'scale(1.25)' : 'scale(1)'
       const shadow = isSelected
         ? '0 0 0 4px rgba(245,158,11,0.4), 0 4px 12px rgba(0,0,0,0.3)'
         : '0 2px 8px rgba(0,0,0,0.25)'
-      const shortName = p.name.split(' ').slice(0, 2).join(' ')
+      const shortName = p.name.split(' ').slice(0, 3).join(' ')
 
       const markerHtml = `
         <div style="display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.2s;cursor:pointer">
           <div style="display:flex;align-items:center;gap:4px;background:${bgColor};color:${textColor};padding:4px 10px;border-radius:9999px;font-size:11px;font-weight:700;border:2px solid white;box-shadow:${shadow}">
-            <span>🍴</span>
-            <span>★${p.rating.toFixed(1)}</span>
+            <span>★${p.rating > 0 ? p.rating.toFixed(1) : 'TA'}</span>
           </div>
           <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${arrowColor};margin-top:-1px"></div>
-          <span style="margin-top:2px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(255,255,255,0.97);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);border:1px solid #e2e8f0">${shortName}</span>
+          <span style="margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(255,255,255,0.97);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);border:1px solid #e2e8f0">${shortName}</span>
         </div>
       `
 
       const placeIcon = L.divIcon({
-        className: '', // empty — no Leaflet white box
+        className: '',
         html: markerHtml,
         iconSize: [120, 60],
         iconAnchor: [60, 52],
@@ -377,27 +290,34 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
       markersRef.current[p.id] = marker
     })
+
+    // If places loaded and no user marker was pinned yet, fit bounds
+    if (filteredPlaces.length > 0 && !me && map) {
+      try {
+        const bounds = L.latLngBounds(filteredPlaces.map((p) => [p.lat, p.lng]))
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.1), { maxZoom: 15 })
+        }
+      } catch {}
+    }
   }, [filteredPlaces, selectedId, me, mapReady])
 
-  // 7. Draw OSRM route ONLY when routeTargetId is explicitly set by user action
+  // 7. Route Fetcher
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || typeof L === 'undefined') return
 
     const map = mapInstanceRef.current
 
-    // Always clear old route first
     if (routeLayerRef.current) {
       map.removeLayer(routeLayerRef.current)
       routeLayerRef.current = null
     }
     setRouteInfo(null)
 
-    // Only proceed if user explicitly triggered a route
     if (!routeTargetId || !me) return
 
     const target = places.find((p) => p.id === routeTargetId)
-    if (!target) return
-    if (km(me, target) < 0.01) return
+    if (!target || km(me, target) < 0.01) return
 
     setRouteLoading(true)
 
@@ -422,12 +342,10 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           name: target.name,
         })
 
-        // Glow layer beneath
         const glowLayer = L.geoJSON(geojson, {
           style: { color: '#93c5fd', weight: 10, opacity: 0.28, lineCap: 'round', lineJoin: 'round' },
         }).addTo(map)
 
-        // Main dashed route line
         const routeLayer = L.geoJSON(geojson, {
           style: { color: '#2563eb', weight: 5, opacity: 0.9, dashArray: '10, 7', lineCap: 'round', lineJoin: 'round' },
         }).addTo(map)
@@ -442,7 +360,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         }
       })
       .catch(() => {
-        // Fallback: straight dashed line
         const fallback = L.polyline(
           [[me.lat, me.lng], [target.lat, target.lng]],
           { color: '#2563eb', weight: 4, opacity: 0.72, dashArray: '8, 10', lineCap: 'round' }
@@ -463,9 +380,8 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         )
       })
       .finally(() => setRouteLoading(false))
-  }, [routeTargetId, me, mapReady])
+  }, [routeTargetId, me, mapReady, places])
 
-  // Clear route automatically when the user switches to a different place
   useEffect(() => {
     setRouteTargetId(null)
   }, [selectedId])
@@ -492,12 +408,20 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     }
   }
 
-  const clusters = [
-    { id: 'all', label: 'All Areas', count: places.length },
-    { id: 'Near Your Location', label: 'Near You (GPS)', count: 3 },
-    { id: 'Trastevere', label: 'Trastevere', count: 42 },
-    { id: 'Centro Storico', label: 'Centro Storico', count: 56 },
-  ]
+  // Dynamically derived clusters from real place data
+  const clusters = useMemo(() => {
+    const clusterMap = new Map<string, number>()
+    places.forEach((p) => {
+      if (p.cluster) {
+        clusterMap.set(p.cluster, (clusterMap.get(p.cluster) || 0) + 1)
+      }
+    })
+    const list = [{ id: 'all', label: 'All Areas', count: places.length }]
+    clusterMap.forEach((count, name) => {
+      list.push({ id: name, label: name, count })
+    })
+    return list
+  }, [places])
 
   return (
     <div className="h-screen max-h-screen w-full bg-[#f8fafc] text-slate-900 flex flex-col overflow-hidden font-['Plus_Jakarta_Sans',sans-serif]">
@@ -535,14 +459,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               Place Details
             </button>
             <button
-              onClick={() => setActiveTab('planner')}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                activeTab === 'planner' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Trip Planner
-            </button>
-            <button
               onClick={() => setActiveTab('saved')}
               className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'saved' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -568,32 +484,24 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search places, dishes, areas…"
+              placeholder="Search TripAdvisor places, venues…"
               className="w-48 lg:w-60 bg-slate-100/80 border border-slate-200/80 rounded-xl pl-8 pr-9 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition"
             />
-            <span className="absolute right-2.5 text-[10px] font-semibold text-slate-400 bg-slate-200/70 px-1 py-0.5 rounded border border-slate-300/60">
-              ⌘K
-            </span>
           </div>
 
-          <button
-            onClick={centerOnUser}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold transition cursor-pointer hover:bg-emerald-100"
-          >
-            <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
-            <span>Center on Me (GPS)</span>
-          </button>
-
           {me && (
-            <div className="hidden xl:flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[11px]">
-              <span className="text-emerald-700 font-bold">📍 GPS:</span>
-              <span>{me.lat.toFixed(4)}, {me.lng.toFixed(4)}</span>
-            </div>
+            <button
+              onClick={centerOnUser}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold transition cursor-pointer hover:bg-emerald-100"
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
+              <span>Center on Me</span>
+            </button>
           )}
 
           <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
             <span className="text-emerald-600">⚡</span>
-            <span>Google Maps Synced</span>
+            <span>TripAdvisor® Connected</span>
           </div>
 
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
@@ -623,7 +531,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
             <span className="text-slate-400">›</span>
             <span>{currentLoc.city}</span>
             <span className="text-[10px] bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-bold border border-emerald-200 ml-1">
-              ● Live Location Scope
+              ● Live Scope
             </span>
             <span className="text-slate-400 text-xs">↕</span>
           </button>
@@ -633,7 +541,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           <div className="hidden md:flex items-center gap-1.5 text-slate-600 text-xs">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="font-semibold text-slate-800">TripAdvisor® Live Sync</span>
-            <span className="text-slate-400">· Last refreshed just now</span>
           </div>
 
           <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg text-xs font-medium">
@@ -689,7 +596,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
-            <span>{sub.icon}</span>
+            {sub.icon && <span>{sub.icon}</span>}
             <span>{sub.label}</span>
           </button>
         ))}
@@ -704,21 +611,23 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         >
           ★ 4.5+
         </button>
-        <button
-          onClick={() => setWithin2km(!within2km)}
-          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition cursor-pointer shrink-0 ${
-            within2km ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-bold' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          ↗ &lt; 2 km
-        </button>
+        {me && (
+          <button
+            onClick={() => setWithin2km(!within2km)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition cursor-pointer shrink-0 ${
+              within2km ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-bold' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            ↗ &lt; 2 km
+          </button>
+        )}
         <button
           onClick={() => setModeratePrice(!moderatePrice)}
           className={`px-2.5 py-1 rounded-full text-xs font-medium border transition cursor-pointer shrink-0 ${
             moderatePrice ? 'border-teal-600 bg-teal-50 text-teal-900 font-bold' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
           }`}
         >
-          €€ Moderate
+          Moderate Price
         </button>
         <button
           onClick={() => setOnlyOpen(!onlyOpen)}
@@ -737,7 +646,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           <aside className="w-full lg:w-[36%] xl:w-[33%] bg-white border-r border-slate-200/90 flex flex-col h-full overflow-hidden shrink-0 z-10 shadow-xs">
             <div className="p-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                <span>NEARBY EXPLORATION / {currentLoc.city.toUpperCase()}</span>
+                <span>TRIPADVISOR / {currentLoc.city.toUpperCase()}</span>
                 <div className="flex items-center gap-1.5 text-slate-700 font-medium lowercase">
                   <span className="text-slate-400 text-[10px]">Sort:</span>
                   <select
@@ -745,7 +654,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                     onChange={(e) => setSortBy(e.target.value as any)}
                     className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-800 outline-none cursor-pointer"
                   >
-                    <option value="distance">Nearest to Me</option>
+                    {me && <option value="distance">Nearest to Me</option>}
                     <option value="rating">Highest Rated</option>
                     <option value="reviews">Most Reviewed</option>
                   </select>
@@ -756,35 +665,63 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                 {filteredPlaces.length} {category.charAt(0).toUpperCase() + category.slice(1)} Found
               </h2>
 
-              <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar">
-                <span className="text-[11px] font-bold text-slate-400 mr-1 shrink-0">Clusters:</span>
-                {clusters.map((cl) => (
-                  <button
-                    key={cl.id}
-                    onClick={() => setSelectedCluster(cl.id)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer shrink-0 ${
-                      selectedCluster === cl.id
-                        ? 'bg-emerald-800 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {cl.label} {cl.count ? `(${cl.count})` : ''}
-                  </button>
-                ))}
-              </div>
+              {clusters.length > 1 && (
+                <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar">
+                  <span className="text-[11px] font-bold text-slate-400 mr-1 shrink-0">Areas:</span>
+                  {clusters.map((cl) => (
+                    <button
+                      key={cl.id}
+                      onClick={() => setSelectedCluster(cl.id)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer shrink-0 ${
+                        selectedCluster === cl.id
+                          ? 'bg-emerald-800 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {cl.label} {cl.count ? `(${cl.count})` : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/50">
+              {apiError && (
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 shadow-xs">
+                  <div className="flex items-center gap-2 font-bold mb-1 text-amber-800">
+                    <span>⚠️</span>
+                    <span>TripAdvisor API Response</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-950 font-mono bg-white/70 p-2 rounded-xl border border-amber-200/60 mt-1">
+                    {apiError}
+                  </p>
+                  <p className="text-[10px] text-amber-700 mt-2">
+                    Tip: In your TripAdvisor Developer Portal, ensure your App is activated and subscribed to the <strong>Location Content API</strong> product.
+                  </p>
+                </div>
+              )}
+
               {loading && (
                 <div className="flex items-center justify-center py-16 text-slate-500 gap-3 text-xs">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent"></div>
-                  <span>Locating verified places near your position…</span>
+                  <span>Fetching live TripAdvisor venues in {currentLoc.city}…</span>
+                </div>
+              )}
+
+              {!loading && filteredPlaces.length === 0 && !apiError && (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                  <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl mb-3">
+                    🔍
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-800">No TripAdvisor results found</h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                    No places matched your filters in {currentLoc.city}. Try clearing filters or switching category.
+                  </p>
                 </div>
               )}
 
               {filteredPlaces.map((p, idx) => {
                 const isSelected = p.id === selectedId
-                const isNearbyGPS = p.id.startsWith('nearby-user-rest-')
 
                 return (
                   <div
@@ -799,15 +736,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                         : 'border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
                     }`}
                   >
-                    {isNearbyGPS && (
-                      <div className="bg-emerald-50 border-b border-emerald-100 px-3.5 py-1 rounded-t-2xl flex items-center justify-between text-[11px] font-bold text-emerald-800">
-                        <span className="flex items-center gap-1">
-                          <span>📍</span> Marked Restaurant Near You (~{me ? km(me, p).toFixed(2) : '0.25'} km)
-                        </span>
-                        <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                      </div>
-                    )}
-
                     <div className="p-3.5 flex gap-3.5">
                       <div className="relative h-24 w-28 sm:h-28 sm:w-32 rounded-xl overflow-hidden bg-slate-100 shrink-0">
                         <img
@@ -815,9 +743,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                           alt={p.name}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         />
-                        <span className="absolute top-1.5 left-1.5 rounded bg-slate-950/75 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                          {p.price || '€€'}
-                        </span>
+                        {p.price && (
+                          <span className="absolute top-1.5 left-1.5 rounded bg-slate-950/75 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                            {p.price}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -848,24 +778,25 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                           </div>
 
                           <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-600">
-                            <span className="font-bold text-amber-600 flex items-center gap-0.5">
-                              ★ {p.rating.toFixed(1)}
-                            </span>
-                            <span className="text-slate-400 text-[11px]">
-                              ({(p.reviewCount || 2400).toLocaleString()} reviews)
-                            </span>
-                          </div>
-
-                          <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                            📍 {p.address}
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                            {p.michelin && (
-                              <span className="rounded-md bg-rose-50 border border-rose-200 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
-                                Michelin Guide
+                            {p.rating > 0 && (
+                              <span className="font-bold text-amber-600 flex items-center gap-0.5">
+                                ★ {p.rating.toFixed(1)}
                               </span>
                             )}
+                            {p.reviewCount ? (
+                              <span className="text-slate-400 text-[11px]">
+                                ({p.reviewCount.toLocaleString()} reviews)
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {p.address && (
+                            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                              📍 {p.address}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
                             {p.tags?.slice(0, 2).map((tag, tIdx) => (
                               <span
                                 key={tIdx}
@@ -886,10 +817,9 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                             <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                              {p.openStatus || 'Open Now'}
+                              {p.openStatus || 'TripAdvisor Place'}
                             </span>
                             <div className="flex items-center gap-1.5">
-                              {/* Show Route — only draws route when clicked */}
                               {me && (
                                 routeTargetId === p.id ? (
                                   <button
@@ -947,17 +877,19 @@ export default function Dashboard({ email, location, onLogout }: Props) {
           {/* Top Floating Map Controls Bar */}
           <div className="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
             <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
-              <button
-                onClick={centerOnUser}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl shadow-md border bg-white/95 text-slate-800 border-slate-200 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
-              >
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-600 animate-ping"></span>
-                <span>My Location Pin</span>
-              </button>
+              {me && (
+                <button
+                  onClick={centerOnUser}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl shadow-md border bg-white/95 text-slate-800 border-slate-200 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+                >
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-600 animate-ping"></span>
+                  <span>My Location</span>
+                </button>
+              )}
 
               <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-                <span>🍴</span>
-                <span>{filteredPlaces.length} Marked Places on Map</span>
+                <span>📍</span>
+                <span>{filteredPlaces.length} TripAdvisor Places on Map</span>
               </div>
             </div>
 
@@ -977,7 +909,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
             </div>
           </div>
 
-          {/* Real Google Map Container via Leaflet Engine */}
+          {/* Map Container */}
           <div ref={mapContainerRef} className="w-full h-full z-0" />
 
           {/* Route Loading Indicator */}
@@ -1018,21 +950,25 @@ export default function Dashboard({ email, location, onLogout }: Props) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
-                    📍 Selected · {selectedPlace.price || '€€'}
+                    📍 Selected {selectedPlace.price ? `· ${selectedPlace.price}` : ''}
                   </span>
                   <h4 className="text-sm font-extrabold text-slate-900 leading-snug mt-0.5 truncate">
                     {selectedPlace.name}
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                    {selectedPlace.address}
-                  </p>
+                  {selectedPlace.address && (
+                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                      {selectedPlace.address}
+                    </p>
+                  )}
                 </div>
-                <span className="bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded text-xs shrink-0">
-                  ★ {selectedPlace.rating.toFixed(1)}
-                </span>
+                {selectedPlace.rating > 0 && (
+                  <span className="bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded text-xs shrink-0">
+                    ★ {selectedPlace.rating.toFixed(1)}
+                  </span>
+                )}
               </div>
 
-              {/* Route Stats — only shown after user clicks Show Route */}
+              {/* Route Stats */}
               {routeLoading && routeTargetId === selectedPlace.id && (
                 <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5 text-[11px] text-blue-600 font-semibold">
                   <svg className="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
@@ -1046,13 +982,12 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                   <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🚶</span><span>{routeInfo.walkMin} min walk</span></div>
                   <span className="w-px h-3 bg-blue-200" />
                   <div className="flex items-center gap-1 text-blue-700 text-[11px] font-bold"><span>🚗</span><span>{routeInfo.drivMin} min drive</span></div>
-                  <span className="ml-auto text-[9px] text-blue-400 font-semibold uppercase tracking-wider">OSRM</span>
                 </div>
               )}
 
               <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-emerald-700 shrink-0">
-                  {me ? `🚶 ~${km(me, selectedPlace).toFixed(2)} km away` : 'Live Pin'}
+                  {me ? `🚶 ~${km(me, selectedPlace).toFixed(2)} km away` : 'Live TripAdvisor Pin'}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1062,7 +997,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                   >
                     Details
                   </button>
-                  {/* Show Route / Clear Route toggle */}
                   {me && (
                     routeTargetId === selectedPlace.id ? (
                       <button
@@ -1094,8 +1028,6 @@ export default function Dashboard({ email, location, onLogout }: Props) {
             </div>
           )}
 
-
-
           {/* Zoom & Locate Controls */}
           <div className="absolute bottom-5 right-4 z-30 flex flex-col bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-slate-200 overflow-hidden text-slate-800 text-xs font-bold">
             <button
@@ -1112,13 +1044,15 @@ export default function Dashboard({ email, location, onLogout }: Props) {
             >
               −
             </button>
-            <button
-              onClick={centerOnUser}
-              className="p-2.5 hover:bg-slate-100 transition cursor-pointer text-blue-600"
-              title="Center on My Location"
-            >
-              🎯
-            </button>
+            {me && (
+              <button
+                onClick={centerOnUser}
+                className="p-2.5 hover:bg-slate-100 transition cursor-pointer text-blue-600"
+                title="Center on My Location"
+              >
+                🎯
+              </button>
+            )}
           </div>
         </main>
       </div>
@@ -1127,13 +1061,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
       <footer className="h-8 bg-white border-t border-slate-200/80 px-4 sm:px-6 flex items-center justify-between text-[11px] text-slate-500 shrink-0 z-30">
         <div className="flex items-center gap-4">
           <span>© 2025 Traversal Inc.</span>
-          <button onClick={() => {}} className="hover:text-slate-800 transition cursor-pointer">Privacy</button>
-          <button onClick={() => {}} className="hover:text-slate-800 transition cursor-pointer">Terms</button>
-          <button onClick={() => {}} className="hover:text-slate-800 transition cursor-pointer">Google Maps Integration</button>
+          <span>Powered by TripAdvisor Content API</span>
         </div>
         <div className="flex items-center gap-1.5 font-medium text-slate-600">
           <span>🌐</span>
-          <span>Wanderlust Engine 4.2</span>
+          <span>Live Travel Discovery</span>
         </div>
       </footer>
 

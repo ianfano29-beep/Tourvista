@@ -7,7 +7,7 @@ interface Props {
 
 export default function AuthPage({ onGuestLogin }: Props) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
-  const [fullName, setFullName] = useState('Elena Vance')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -58,13 +58,20 @@ export default function AuthPage({ onGuestLogin }: Props) {
     setBusy(true)
     setMsg('')
 
-    const submitEmail = email.trim() || (mode === 'signup' ? 'ianfano29@gmail.com' : 'ianfano29@gmail.com')
+    const submitEmail = email.trim()
 
-    // Static Account verification
+    if (!submitEmail) {
+      setBusy(false)
+      setMsgType('error')
+      setMsg('Please enter a valid email address.')
+      return
+    }
+
+    // Direct demo login fallback if password provided
     if (submitEmail.toLowerCase() === 'ianfano29@gmail.com' && password === 'ianfano') {
       setTimeout(() => {
         setBusy(false)
-        onGuestLogin?.('ianfano29@gmail.com')
+        onGuestLogin?.(submitEmail)
       }, 300)
       return
     }
@@ -230,7 +237,7 @@ export default function AuthPage({ onGuestLogin }: Props) {
                         type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Elena Vance"
+                        placeholder="Your Full Name"
                         required
                         className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-8.5 pr-3 py-1.5 text-xs text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15"
                       />
@@ -250,7 +257,7 @@ export default function AuthPage({ onGuestLogin }: Props) {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder={mode === 'login' ? 'ianfano29@gmail.com' : 'ianfano29@gmail.com'}
+                      placeholder="name@example.com"
                       className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-8.5 pr-3 py-1.5 text-xs text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15"
                     />
                   </div>

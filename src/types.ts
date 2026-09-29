@@ -41,12 +41,12 @@ export interface Review {
   date?: string
 }
 
-export const CATEGORIES: { id: Category; label: string; count?: number; icon?: string }[] = [
-  { id: 'restaurants', label: 'Restaurants', count: 142, icon: '🍴' },
-  { id: 'attractions', label: 'Popular sights', count: 86, icon: '🏛️' },
-  { id: 'hotels', label: 'Hotels', count: 94, icon: '🏨' },
-  { id: 'tours', label: 'Tours', count: 48, icon: '🚶' },
-  { id: 'inspire', label: 'Inspire me', count: 32, icon: '✨' },
+export const CATEGORIES: { id: Category; label: string; icon: string }[] = [
+  { id: 'restaurants', label: 'Restaurants', icon: '🍴' },
+  { id: 'attractions', label: 'Popular sights', icon: '🏛️' },
+  { id: 'hotels', label: 'Hotels', icon: '🏨' },
+  { id: 'tours', label: 'Tours', icon: '🚶' },
+  { id: 'inspire', label: 'Inspire me', icon: '✨' },
 ]
 
 export interface SubCategoryFilter {
@@ -59,7 +59,7 @@ export const SUB_FILTERS: SubCategoryFilter[] = [
   { id: 'all', label: 'All Places' },
   { id: 'trattorias', label: 'Trattorias & Osterias', icon: '🍝' },
   { id: 'pizzerias', label: 'Pizzerias', icon: '🍕' },
-  { id: 'gelato', label: 'Gelato & Sweets', icon: '🍨' },
-  { id: 'fine_dining', label: 'Fine Dining (Michelin)', icon: '⭐' },
-  { id: 'wine_bars', label: 'Wine Bars', icon: '🍷' },
+  { id: 'gelato', label: 'Desserts & Bakeries', icon: '🍨' },
+  { id: 'fine_dining', label: 'Fine Dining', icon: '⭐' },
+  { id: 'wine_bars', label: 'Bars & Lounges', icon: '🍷' },
 ]

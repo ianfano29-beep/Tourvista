@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/tripadvisor/:path*",
+      "destination": "https://api.content.tripadvisor.com/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

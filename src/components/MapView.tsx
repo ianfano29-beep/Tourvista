@@ -243,8 +243,11 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
     }
 
     fetchPlaces(category, location.city, latLong)
-      .then((p) => {
-        if (live) setPlaces(p)
+      .then((res) => {
+        if (live) {
+          setPlaces(res.places)
+          if (res.error) setError(res.error)
+        }
       })
       .catch((e: Error) => {
         if (live) setError(e.message)
