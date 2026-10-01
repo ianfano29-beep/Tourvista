@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchPlaces, fetchSearchSuggestions, type SearchSuggestion } from '../lib/tripadvisor'
+import { fetchPlaces, fetchSearchSuggestions, CITY_COORDINATES, type SearchSuggestion } from '../lib/tripadvisor'
 import { fetchLocalPlaces } from '../lib/localPlaces'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { km } from '../lib/geo'
@@ -610,8 +610,54 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
   }, [routeTargetId, me, mapReady, allPlaces])
 
   useEffect(() => {
-    setRouteTargetId(null)
+    if (selectedId && routeTargetId && selectedId !== routeTargetId) {
+      setRouteTargetId(null)
+    }
   }, [selectedId])
+
+  const handleToggleRoute = (targetPlaceId: string) => {
+    if (routeTargetId === targetPlaceId) {
+      setRouteTargetId(null)
+      if (routeLayerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(routeLayerRef.current)
+        routeLayerRef.current = null
+      }
+      setRouteInfo(null)
+      return
+    }
+
+    setSelectedId(targetPlaceId)
+
+    if (me) {
+      setRouteTargetId(targetPlaceId)
+      return
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userCoords: LatLng = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }
+          setMe(userCoords)
+          setRouteTargetId(targetPlaceId)
+        },
+        () => {
+          const cityCoords = CITY_COORDINATES[currentLoc.city] || { lat: 6.1164, lon: 125.1716 }
+          const defaultOrigin: LatLng = { lat: cityCoords.lat, lng: cityCoords.lon }
+          setMe(defaultOrigin)
+          setRouteTargetId(targetPlaceId)
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      )
+    } else {
+      const cityCoords = CITY_COORDINATES[currentLoc.city] || { lat: 6.1164, lon: 125.1716 }
+      const defaultOrigin: LatLng = { lat: cityCoords.lat, lng: cityCoords.lon }
+      setMe(defaultOrigin)
+      setRouteTargetId(targetPlaceId)
+    }
+  }
 
   const toggleSave = async (p: Place) => {
     const next = new Set(saved)
@@ -689,6 +735,18 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
   const centerOnUser = () => {
     if (me && mapInstanceRef.current) {
       mapInstanceRef.current.flyTo([me.lat, me.lng], 15, { duration: 0.8 })
+    } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          setMe(coords)
+          mapInstanceRef.current?.flyTo([coords.lat, coords.lng], 15, { duration: 0.8 })
+        },
+        () => {
+          const cityCoords = CITY_COORDINATES[currentLoc.city] || { lat: 6.1164, lon: 125.1716 }
+          mapInstanceRef.current?.flyTo([cityCoords.lat, cityCoords.lon], 15, { duration: 0.8 })
+        }
+      )
     }
   }
 
@@ -1037,35 +1095,28 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
                                   </a>
                                 )
                               )}
-                              {me && (
-                                routeTargetId === p.id ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setRouteTargetId(null)
-                                      if (routeLayerRef.current && mapInstanceRef.current) {
-                                        mapInstanceRef.current.removeLayer(routeLayerRef.current)
-                                        routeLayerRef.current = null
-                                      }
-                                      setRouteInfo(null)
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg border border-blue-300 bg-blue-50 hover:bg-blue-100 text-xs font-semibold text-blue-700 transition cursor-pointer flex items-center gap-1"
-                                  >
-                                    Clear Route
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setRouteTargetId(p.id)
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg border border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 text-xs font-semibold text-blue-700 transition cursor-pointer flex items-center gap-1"
-                                  >
-                                    Show Route
-                                  </button>
-                                )
+                              {routeTargetId === p.id ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleRoute(p.id)
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg border border-blue-300 bg-blue-50 hover:bg-blue-100 text-xs font-semibold text-blue-700 transition cursor-pointer flex items-center gap-1"
+                                >
+                                  Clear Route
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleRoute(p.id)
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg border border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 text-xs font-semibold text-blue-700 transition cursor-pointer flex items-center gap-1"
+                                >
+                                  Show Route
+                                </button>
                               )}
                               <button
                                 type="button"
@@ -1241,31 +1292,22 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
                     )
                   )}
 
-                  {me && (
-                    routeTargetId === selectedPlace.id ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRouteTargetId(null)
-                          if (routeLayerRef.current && mapInstanceRef.current) {
-                            mapInstanceRef.current.removeLayer(routeLayerRef.current)
-                            routeLayerRef.current = null
-                          }
-                          setRouteInfo(null)
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer flex items-center shadow-xs"
-                      >
-                        Clear Route
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setRouteTargetId(selectedPlace.id)}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer flex items-center shadow-xs"
-                      >
-                        Show Route
-                      </button>
-                    )
+                  {routeTargetId === selectedPlace.id ? (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRoute(selectedPlace.id)}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer flex items-center shadow-xs"
+                    >
+                      Clear Route
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRoute(selectedPlace.id)}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer flex items-center shadow-xs"
+                    >
+                      Show Route
+                    </button>
                   )}
                 </div>
               </div>
@@ -1288,21 +1330,19 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
             >
               −
             </button>
-            {me && (
-              <button
-                onClick={centerOnUser}
-                className="p-2.5 hover:bg-slate-100 transition cursor-pointer text-blue-600 flex items-center justify-center"
-                title="Center on My Location"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="7" />
-                  <line x1="12" y1="1" x2="12" y2="5" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="1" y1="12" x2="5" y2="12" />
-                  <line x1="19" y1="12" x2="23" y2="12" />
-                </svg>
-              </button>
-            )}
+            <button
+              onClick={centerOnUser}
+              className="p-2.5 hover:bg-slate-100 transition cursor-pointer text-blue-600 flex items-center justify-center"
+              title="Center on My Location"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="7" />
+                <line x1="12" y1="1" x2="12" y2="5" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="1" y1="12" x2="5" y2="12" />
+                <line x1="19" y1="12" x2="23" y2="12" />
+              </svg>
+            </button>
           </div>
         </main>
       </div>
