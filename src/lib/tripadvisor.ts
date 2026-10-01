@@ -4,7 +4,7 @@ import type { Category, Place, Review } from '../types'
 const TRIPADVISOR_API_KEY =
   (import.meta.env.VITE_TRIPADVISOR_API_KEY as string | undefined) ||
   (import.meta.env.VITE_TRIPADVISOR_KEY as string | undefined) ||
-  'ab2264da-675f-43bc-82b0-f85288835d00'
+  '2d61e810-e5f3-4370-bacc-df6c33a59a92'
 
 const TA_BASE = '/api/tripadvisor/api'
 
