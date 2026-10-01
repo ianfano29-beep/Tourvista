@@ -53,6 +53,7 @@ export interface SearchSuggestion {
 
 export const CATEGORY_PHOTOS: Record<Category, string> = {
   attractions: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+  nature: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
   beaches: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
   shopping: 'https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=800&q=80',
   heritage: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=800&q=80',
@@ -115,6 +116,20 @@ function classifyCategory(mainUrl: string = '', name: string = ''): Category {
     lowerName.includes('villa')
   ) {
     return 'hotels'
+  }
+  if (
+    lowerName.includes('park') ||
+    lowerName.includes('peak') ||
+    lowerName.includes('mountain') ||
+    lowerName.includes('falls') ||
+    lowerName.includes('waterfall') ||
+    lowerName.includes('nature') ||
+    lowerName.includes('garden') ||
+    lowerName.includes('ridge') ||
+    lowerName.includes('cave') ||
+    lowerName.includes('hill')
+  ) {
+    return 'nature'
   }
   return 'attractions'
 }
@@ -315,9 +330,11 @@ async function directFetchPlaces(
 
       let lat = Number(loc.coordinates?.latitude)
       let lng = Number(loc.coordinates?.longitude)
+      let hasRealCoords = true
       if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
         lat = centerLat + ((index % 5) - 2) * 0.008
         lng = centerLon + (Math.floor(index / 5) - 2) * 0.008
+        hasRealCoords = false
       }
 
       const description =
@@ -351,6 +368,7 @@ async function directFetchPlaces(
         url: mainUrl,
         lat,
         lng,
+        hasRealCoords,
         openStatus: 'Open Now · TripAdvisor Live',
         tags,
       }

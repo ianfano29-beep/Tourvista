@@ -9,6 +9,7 @@ type Category =
   | 'hotels'
   | 'tours'
   | 'attractions'
+  | 'nature'
   | 'inspire'
   | 'heritage'
   | 'shopping'
@@ -49,6 +50,7 @@ const BLANK_FORM: Omit<LocalPlace, 'id' | 'created_at'> = {
 
 const CATEGORIES: { id: Category; label: string }[] = [
   { id: 'attractions', label: 'Attractions' },
+  { id: 'nature', label: 'Nature & Parks' },
   { id: 'beaches', label: 'Beaches' },
   { id: 'shopping', label: 'Shopping' },
   { id: 'heritage', label: 'Heritage' },

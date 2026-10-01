@@ -3,6 +3,7 @@ export type Category =
   | 'hotels'
   | 'tours'
   | 'attractions'
+  | 'nature'
   | 'inspire'
   | 'heritage'
   | 'shopping'
@@ -41,6 +42,7 @@ export interface Place extends LatLng {
   hours?: string
   isLocal?: boolean        // true = sourced from Supabase local_places, not TripAdvisor
   referenceUrl?: string   // external reference link (blog, wiki, FB page, etc.)
+  hasRealCoords?: boolean  // true = real GPS coordinates from API; false = estimated fallback
 }
 
 export interface Review {
@@ -54,6 +56,7 @@ export interface Review {
 
 export const CATEGORIES: { id: Category; label: string; icon: string }[] = [
   { id: 'attractions', label: 'Popular sights', icon: '🏛️' },
+  { id: 'nature', label: 'Nature & Parks', icon: '🌿' },
   { id: 'beaches', label: 'Beaches & Coastal', icon: '🏖️' },
   { id: 'shopping', label: 'Shopping & Markets', icon: '🛍️' },
   { id: 'heritage', label: 'Heritage', icon: '🏺' },
