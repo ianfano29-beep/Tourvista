@@ -32,3 +32,25 @@ create policy "own rows" on trips for all using (auth.uid() = user_id) with chec
 create policy "own rows" on trip_items for all
   using (exists (select 1 from trips t where t.id = trip_id and t.user_id = auth.uid()))
   with check (exists (select 1 from trips t where t.id = trip_id and t.user_id = auth.uid()));
+
+-- Local curated places (manually added via Supabase dashboard, visible to all users)
+create table local_places (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  lat           float8 not null,
+  lng           float8 not null,
+  image_url     text not null,
+  reference_url text,
+  description   text,
+  category      text not null check (category in ('restaurants','hotels','tours','attractions','inspire')),
+  address       text,
+  tags          text[],
+  rating        float4 default 0,
+  city          text not null default 'General Santos City',
+  created_at    timestamptz default now()
+);
+
+alter table local_places enable row level security;
+
+-- Anyone (including unauthenticated visitors) can read local places
+create policy "public read" on local_places for select using (true);

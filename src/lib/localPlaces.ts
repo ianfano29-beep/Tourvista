@@ -1,69 +1,80 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { GENSAN_LOCAL_PLACES } from '../data/gensan_places'
 import type { Category, Place } from '../types'
 
-// Shape of a row in the Supabase `local_places` table
-interface LocalPlaceRow {
-  id: string
-  name: string
-  lat: number
-  lng: number
-  image_url: string
-  reference_url?: string
-  description?: string
-  category: Category
-  address?: string
-  tags?: string[]
-  rating?: number
-  city: string
-}
-
 /**
- * Fetch locally-added places from Supabase for a given category + city.
- * Returns an empty array (silently) when Supabase is not configured.
+ * Fetch locally-curated places for a given category + city.
+ *
+ * Priority:
+ *  1. Always reads from the static `gensan_places.ts` file first (no DB needed).
+ *  2. If Supabase is configured, also fetches from the `local_places` table
+ *     and merges those results on top.
  */
 export async function fetchLocalPlaces(
   category: Category,
   city: string,
   searchQuery?: string
 ): Promise<Place[]> {
-  if (!isSupabaseConfigured) return []
+  const q = searchQuery?.trim().toLowerCase() ?? ''
 
-  try {
-    let query = supabase
-      .from('local_places')
-      .select('*')
-      .ilike('city', `%${city.split(' ')[0]}%`) // loose city match
-      .eq('category', category)
-
-    if (searchQuery && searchQuery.trim().length > 0) {
-      query = query.ilike('name', `%${searchQuery}%`)
+  // 1. Static places from gensan_places.ts
+  let staticResults = GENSAN_LOCAL_PLACES.filter((p) => {
+    if (p.category !== category) return false
+    if (q) {
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.tags?.some((t) => t.toLowerCase().includes(q))
+      )
     }
+    return true
+  }).map((p, i) => ({
+    ...p,
+    id: `static_local_${i}_${p.name.replace(/\s+/g, '_')}`,
+  })) as Place[]
 
-    const { data, error } = await query
+  // 2. Optional Supabase overlay (only if credentials are set)
+  if (isSupabaseConfigured) {
+    try {
+      let query = supabase
+        .from('local_places')
+        .select('*')
+        .ilike('city', `%${city.split(' ')[0]}%`)
+        .eq('category', category)
 
-    if (error) {
-      console.warn('[localPlaces] Supabase fetch error:', error.message)
-      return []
+      if (q) {
+        query = query.ilike('name', `%${q}%`)
+      }
+
+      const { data } = await query
+      if (data && data.length > 0) {
+        const dbPlaces = data.map((row: any) => ({
+          id: `db_local_${row.id}`,
+          name: row.name,
+          lat: row.lat,
+          lng: row.lng,
+          photo: row.image_url,
+          referenceUrl: row.reference_url || '',
+          url: row.reference_url || '',
+          description: row.description || '',
+          category: row.category as Category,
+          address: row.address || city,
+          tags: row.tags || [],
+          rating: row.rating || 0,
+          reviewCount: 0,
+          isLocal: true,
+        })) as Place[]
+
+        // Merge: static first, then DB additions (no duplicates by name)
+        const existingNames = new Set(staticResults.map((p) => p.name.toLowerCase()))
+        const newFromDb = dbPlaces.filter((p) => !existingNames.has(p.name.toLowerCase()))
+        staticResults = [...staticResults, ...newFromDb]
+      }
+    } catch (err) {
+      console.warn('[localPlaces] Supabase fetch error (using static only):', err)
     }
-
-    return (data as LocalPlaceRow[]).map((row) => ({
-      id: `local_${row.id}`,
-      name: row.name,
-      lat: row.lat,
-      lng: row.lng,
-      photo: row.image_url,
-      referenceUrl: row.reference_url || '',
-      url: row.reference_url || '',
-      description: row.description || '',
-      category: row.category,
-      address: row.address || city,
-      tags: row.tags || [],
-      rating: row.rating || 0,
-      reviewCount: 0,
-      isLocal: true,
-    }))
-  } catch (err) {
-    console.warn('[localPlaces] Unexpected error:', err)
-    return []
   }
+
+  return staticResults
 }
+
