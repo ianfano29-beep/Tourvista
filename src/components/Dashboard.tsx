@@ -814,8 +814,29 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
                   onClick={() => setLocationModalOpen(true)}
                   className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-emerald-800 font-bold transition cursor-pointer shrink-0 shadow-2xs"
                 >
-                  Change Place / Search ↗
+                  Change City / Search ↗
                 </button>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto no-scrollbar pb-1">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      setCategory(c.id)
+                      setSubFilter('all')
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold transition cursor-pointer shrink-0 flex items-center gap-1 ${
+                      category === c.id
+                        ? 'bg-emerald-800 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{c.icon}</span>
+                    <span>{c.label}</span>
+                  </button>
+                ))}
               </div>
 
               {clusters.length > 1 && (

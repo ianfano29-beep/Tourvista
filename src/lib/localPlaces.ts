@@ -19,7 +19,6 @@ export async function fetchLocalPlaces(
 
   // 1. Static places from gensan_places.ts
   let staticResults = GENSAN_LOCAL_PLACES.filter((p) => {
-    if (p.category !== category) return false
     if (q) {
       return (
         p.name.toLowerCase().includes(q) ||
@@ -27,7 +26,7 @@ export async function fetchLocalPlaces(
         p.tags?.some((t) => t.toLowerCase().includes(q))
       )
     }
-    return true
+    return p.category === category
   }).map((p, i) => ({
     ...p,
     id: `static_local_${i}_${p.name.replace(/\s+/g, '_')}`,
@@ -36,11 +35,16 @@ export async function fetchLocalPlaces(
   // 2. Optional Supabase overlay (only if credentials are set)
   if (isSupabaseConfigured) {
     try {
-      const { data } = await supabase
+      let query = supabase
         .from('local_places')
         .select('*')
         .ilike('city', `%${city.split(' ')[0]}%`)
-        .eq('category', category)
+
+      if (!q) {
+        query = query.eq('category', category)
+      }
+
+      const { data } = await query
 
       if (data && data.length > 0) {
         let dbPlaces = data.map((row: any) => ({
