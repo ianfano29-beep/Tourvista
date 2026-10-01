@@ -8,13 +8,9 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const [phase, setPhase] = useState<'enter' | 'hold' | 'exit'>('enter')
 
   useEffect(() => {
-    // Phase: enter (0ms → 600ms fade/scale in)
     const holdTimer = setTimeout(() => setPhase('hold'), 600)
-    // Phase: exit (2100ms → 2500ms fade out)
     const exitTimer = setTimeout(() => setPhase('exit'), 2100)
-    // Phase: done (2500ms)
     const doneTimer = setTimeout(() => onFinish(), 2500)
-
     return () => {
       clearTimeout(holdTimer)
       clearTimeout(exitTimer)
@@ -24,6 +20,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
 
   return (
     <div
+      id="splash-root"
       style={{
         position: 'fixed',
         inset: 0,
@@ -35,58 +32,41 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         background: 'linear-gradient(135deg, #08182b 0%, #0d2137 40%, #0a2540 70%, #05111e 100%)',
         transition: phase === 'exit' ? 'opacity 0.4s ease-out' : undefined,
         opacity: phase === 'exit' ? 0 : 1,
+        pointerEvents: phase === 'exit' ? 'none' : 'auto',
+        overflowX: 'hidden',
       }}
     >
-      {/* Ambient glow blobs */}
-      <div style={{
-        position: 'absolute', width: 500, height: 500,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(0,168,150,0.18) 0%, transparent 70%)',
-        top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        animation: 'splashPulse 3s ease-in-out infinite',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', width: 300, height: 300,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%)',
-        top: '35%', left: '60%',
-        transform: 'translate(-50%, -50%)',
-        animation: 'splashPulse 4s ease-in-out infinite reverse',
-        pointerEvents: 'none',
-      }} />
+      {/* ── Ambient glow blobs ── */}
+      <div className="splash-blob splash-blob--teal" />
+      <div className="splash-blob splash-blob--amber" />
 
-      {/* Logo container */}
+      {/* ── Main logo group ── */}
       <div
+        className="splash-logo-group"
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 32,
-          animation: phase === 'enter'
-            ? 'splashEnter 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards'
-            : undefined,
+          animation:
+            phase === 'enter'
+              ? 'splashEnter 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards'
+              : undefined,
           opacity: phase === 'enter' ? 0 : 1,
         }}
       >
-        {/* Emblem only (large) */}
-        <div style={{
-          width: 160,
-          height: 160,
-          animation: 'splashRotateIn 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.1s both',
-          filter: 'drop-shadow(0 0 32px rgba(0,168,150,0.5)) drop-shadow(0 0 8px rgba(0,168,150,0.3))',
-        }}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none" width="160" height="160">
+        {/* Emblem */}
+        <div className="splash-emblem">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 180 180"
+            fill="none"
+            width="100%"
+            height="100%"
+          >
             <defs>
               <clipPath id="splash-clip">
                 <circle cx="90" cy="90" r="70" />
               </clipPath>
             </defs>
-            {/* Outer ring */}
             <circle cx="90" cy="90" r="72" fill="#08182b" />
             <circle cx="90" cy="90" r="72" stroke="#00A896" strokeWidth="7" fill="#08182b" />
-            {/* Inner scene */}
             <g clipPath="url(#splash-clip)">
               <rect x="10" y="10" width="160" height="160" fill="#08182b" />
               <circle cx="128" cy="58" r="16" fill="#F59E0B" />
@@ -104,44 +84,36 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
                 strokeLinejoin="round"
               />
             </g>
-            {/* Bottom arc */}
-            <path d="M 56 154 C 74 163, 106 163, 124 154 C 112 165, 68 165, 56 154 Z" fill="#00A896" />
+            <path
+              d="M 56 154 C 74 163, 106 163, 124 154 C 112 165, 68 165, 56 154 Z"
+              fill="#00A896"
+            />
           </svg>
         </div>
 
-        {/* Text group */}
-        <div style={{
-          textAlign: 'center',
-          animation: 'splashTextIn 0.6s ease-out 0.3s both',
-        }}>
-          {/* TourVista wordmark */}
-          <div style={{
-            fontFamily: "'Plus Jakarta Sans', 'Outfit', 'Inter', system-ui, sans-serif",
-            fontWeight: 900,
-            fontSize: 52,
-            letterSpacing: '-0.03em',
-            lineHeight: 1,
-          }}>
+        {/* Text */}
+        <div className="splash-text-group">
+          {/* Wordmark */}
+          <div className="splash-wordmark">
             <span style={{ color: '#ffffff' }}>Tour</span>
             <span style={{ color: '#00A896' }}>Vista</span>
           </div>
 
           {/* Subtitle */}
-          <div style={{
-            fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif",
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: '0.34em',
-            color: '#94a3b8',
-            marginTop: 8,
-            animation: 'splashTextIn 0.6s ease-out 0.5s both',
-            opacity: 0,
-          }}>
+          <div
+            className="splash-subtitle"
+            style={{ animation: 'splashTextIn 0.6s ease-out 0.5s both' }}
+          >
             EXPLORE BEYOND
           </div>
 
-          {/* Swoosh underline */}
-          <svg width="240" height="18" viewBox="0 0 240 18" fill="none" style={{ marginTop: 6 }}>
+          {/* Animated swoosh underline */}
+          <svg
+            className="splash-swoosh"
+            viewBox="0 0 240 18"
+            fill="none"
+            preserveAspectRatio="none"
+          >
             <path
               d="M 4 9 Q 120 18 236 9"
               stroke="#00A896"
@@ -153,25 +125,16 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         </div>
       </div>
 
-      {/* Loading dots */}
-      <div style={{
-        position: 'absolute',
-        bottom: 64,
-        display: 'flex',
-        gap: 8,
-        animation: 'splashTextIn 0.5s ease-out 0.8s both',
-        opacity: 0,
-      }}>
-        {[0, 1, 2].map(i => (
+      {/* ── Loading dots ── */}
+      <div
+        className="splash-dots"
+        style={{ animation: 'splashTextIn 0.5s ease-out 0.8s both', opacity: 0 }}
+      >
+        {[0, 1, 2].map((i) => (
           <div
             key={i}
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              backgroundColor: '#00A896',
-              animation: `splashDot 1.2s ease-in-out ${i * 0.2}s infinite`,
-            }}
+            className="splash-dot"
+            style={{ animationDelay: `${i * 0.2}s` }}
           />
         ))}
       </div>
@@ -179,16 +142,111 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;900&display=swap');
 
+        /* ─── Layout ─── */
+        .splash-logo-group {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: clamp(20px, 4vw, 36px);
+          padding: 0 clamp(16px, 5vw, 48px);
+          max-width: 100vw;
+          box-sizing: border-box;
+        }
+
+        /* ─── Emblem ─── */
+        .splash-emblem {
+          width:  clamp(120px, 38vw, 200px);
+          height: clamp(120px, 38vw, 200px);
+          animation: splashRotateIn 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.1s both;
+          filter: drop-shadow(0 0 clamp(16px, 5vw, 36px) rgba(0,168,150,0.50))
+                  drop-shadow(0 0 6px rgba(0,168,150,0.30));
+          flex-shrink: 0;
+        }
+
+        /* ─── Text group ─── */
+        .splash-text-group {
+          text-align: center;
+          animation: splashTextIn 0.6s ease-out 0.3s both;
+          width: 100%;
+        }
+
+        /* ─── Wordmark ─── */
+        .splash-wordmark {
+          font-family: 'Plus Jakarta Sans', 'Outfit', 'Inter', system-ui, sans-serif;
+          font-weight: 900;
+          font-size: clamp(36px, 11vw, 60px);
+          letter-spacing: -0.03em;
+          line-height: 1;
+        }
+
+        /* ─── Subtitle ─── */
+        .splash-subtitle {
+          font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+          font-weight: 700;
+          font-size: clamp(9px, 2.5vw, 13px);
+          letter-spacing: 0.34em;
+          color: #94a3b8;
+          margin-top: clamp(6px, 2vw, 10px);
+          opacity: 0;
+        }
+
+        /* ─── Swoosh ─── */
+        .splash-swoosh {
+          display: block;
+          width: clamp(160px, 55vw, 260px);
+          height: 18px;
+          margin: clamp(4px, 1.5vw, 8px) auto 0;
+        }
+
+        /* ─── Glow blobs ─── */
+        .splash-blob {
+          position: absolute;
+          border-radius: 50%;
+          pointer-events: none;
+        }
+        .splash-blob--teal {
+          width:  clamp(280px, 80vw, 540px);
+          height: clamp(280px, 80vw, 540px);
+          background: radial-gradient(circle, rgba(0,168,150,0.18) 0%, transparent 70%);
+          top: 50%; left: 50%;
+          transform: translate(-50%, -50%);
+          animation: splashPulse 3s ease-in-out infinite;
+        }
+        .splash-blob--amber {
+          width:  clamp(180px, 55vw, 320px);
+          height: clamp(180px, 55vw, 320px);
+          background: radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%);
+          top: 32%; left: 62%;
+          transform: translate(-50%, -50%);
+          animation: splashPulse 4s ease-in-out infinite reverse;
+        }
+
+        /* ─── Loading dots ─── */
+        .splash-dots {
+          position: absolute;
+          bottom: clamp(32px, 8vw, 72px);
+          display: flex;
+          gap: clamp(6px, 2vw, 10px);
+        }
+        .splash-dot {
+          width:  clamp(5px, 1.8vw, 8px);
+          height: clamp(5px, 1.8vw, 8px);
+          border-radius: 50%;
+          background-color: #00A896;
+          animation: splashDot 1.2s ease-in-out infinite;
+        }
+
+        /* ─── Keyframes ─── */
         @keyframes splashEnter {
           from { opacity: 0; transform: translateY(30px) scale(0.92); }
           to   { opacity: 1; transform: translateY(0)    scale(1); }
         }
         @keyframes splashRotateIn {
-          from { opacity: 0; transform: scale(0.6) rotate(-15deg); }
-          to   { opacity: 1; transform: scale(1)   rotate(0deg); }
+          from { opacity: 0; transform: scale(0.55) rotate(-18deg); }
+          to   { opacity: 1; transform: scale(1)    rotate(0deg); }
         }
         @keyframes splashTextIn {
-          from { opacity: 0; transform: translateY(12px); }
+          from { opacity: 0; transform: translateY(14px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes splashSwoosh {
@@ -196,12 +254,24 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           to   { stroke-dasharray: 300; stroke-dashoffset: 0; }
         }
         @keyframes splashPulse {
-          0%, 100% { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+          0%, 100% { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
           50%       { transform: translate(-50%, -50%) scale(1.15); opacity: 0.7; }
         }
         @keyframes splashDot {
           0%, 80%, 100% { transform: scale(1);   opacity: 0.4; }
-          40%            { transform: scale(1.5); opacity: 1; }
+          40%            { transform: scale(1.6); opacity: 1; }
+        }
+
+        /* ─── Phone-specific overrides (≤ 480px) ─── */
+        @media (max-width: 480px) {
+          .splash-logo-group { gap: 18px; }
+          .splash-blob--amber { left: 70%; }
+        }
+
+        /* ─── Very small phones (≤ 360px) ─── */
+        @media (max-width: 360px) {
+          .splash-wordmark { font-size: 32px; }
+          .splash-emblem   { width: 110px; height: 110px; }
         }
       `}</style>
     </div>
