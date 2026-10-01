@@ -966,7 +966,7 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/50">
-              {apiError && (
+              {apiError && filteredPlaces.length === 0 && (
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 shadow-xs">
                   <div className="flex items-center gap-2 font-bold mb-1 text-amber-800">
                     <span>TripAdvisor API Note</span>
