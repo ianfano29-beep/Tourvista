@@ -104,7 +104,12 @@ export default function PlaceModal({
 
   const handleCommentSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!newComment.trim()) return
+    if (isGuest || !newComment.trim()) {
+      if (isGuest) {
+        setCommentError('Sign in with an account to post feedback and reviews.')
+      }
+      return
+    }
 
     setSubmittingComment(true)
     setCommentError('')
@@ -306,54 +311,66 @@ export default function PlaceModal({
               </span>
             </div>
 
-            {/* Review input form */}
-            <form onSubmit={handleCommentSubmit} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">
-                  Post as <span className="text-emerald-700 font-semibold">{userEmail || 'Traveler'}</span>
-                </span>
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setCommentRating(star)}
-                      className={`text-base leading-none transition cursor-pointer ${
-                        star <= commentRating ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'
-                      }`}
-                      title={`${star} Star${star > 1 ? 's' : ''}`}
-                    >
-                      ★
-                    </button>
-                  ))}
+            {/* Review input form (Only for logged-in accounts) */}
+            {!isGuest ? (
+              <form onSubmit={handleCommentSubmit} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">
+                    Post as <span className="text-emerald-700 font-semibold">{userEmail}</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setCommentRating(star)}
+                        className={`text-base leading-none transition cursor-pointer ${
+                          star <= commentRating ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'
+                        }`}
+                        title={`${star} Star${star > 1 ? 's' : ''}`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Share your experience, tips, or recommendations for this place..."
+                  maxLength={500}
+                  required
+                  className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 resize-none"
+                />
+
+                {commentError && (
+                  <p className="text-[11px] font-semibold text-rose-600">{commentError}</p>
+                )}
+
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="text-[10px] text-slate-400">{newComment.length}/500</span>
+                  <button
+                    type="submit"
+                    disabled={submittingComment || !newComment.trim()}
+                    className="rounded-xl bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    {submittingComment ? 'Posting…' : 'Post Feedback'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="rounded-2xl bg-amber-50/90 border border-amber-200/90 p-3.5 flex items-center gap-3 text-xs text-amber-950 shadow-2xs">
+                <span className="text-xl shrink-0">🔒</span>
+                <div>
+                  <p className="font-bold text-amber-900">Sign in required to post reviews</p>
+                  <p className="text-amber-800/90 text-[11px] mt-0.5 leading-snug">
+                    You are exploring in <strong>Guest / Demo Mode</strong>. Only registered users who sign in with an account can post feedback and ratings.
+                  </p>
                 </div>
               </div>
-
-              <textarea
-                rows={3}
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Share your experience, tips, or recommendations for this place..."
-                maxLength={500}
-                required
-                className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 resize-none"
-              />
-
-              {commentError && (
-                <p className="text-[11px] font-semibold text-rose-600">{commentError}</p>
-              )}
-
-              <div className="flex items-center justify-between pt-0.5">
-                <span className="text-[10px] text-slate-400">{newComment.length}/500</span>
-                <button
-                  type="submit"
-                  disabled={submittingComment || !newComment.trim()}
-                  className="rounded-xl bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                >
-                  {submittingComment ? 'Posting…' : 'Post Feedback'}
-                </button>
-              </div>
-            </form>
+            )}
 
             {/* Scrollable Comments List */}
             <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
@@ -362,9 +379,11 @@ export default function PlaceModal({
               ) : comments.length === 0 ? (
                 <div className="rounded-2xl bg-slate-50/60 border border-slate-100 p-4 text-center">
                   <p className="text-xs text-slate-500">No feedback posted yet for this place.</p>
-                  <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-                    Be the first to share your thoughts!
-                  </p>
+                  {!isGuest && (
+                    <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+                      Be the first to share your thoughts!
+                    </p>
+                  )}
                 </div>
               ) : (
                 comments.map((c) => (
