@@ -159,7 +159,7 @@ function FallbackInteractiveMap({
                   : 'bg-teal-700 hover:bg-teal-600'
               }`}
             >
-              <span>★ {p.rating.toFixed(1)}</span>
+              <span>★ {(p.rating || 0).toFixed(1)}</span>
             </div>
             <div
               className={`w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] -mt-0.5 ${

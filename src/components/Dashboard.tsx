@@ -111,6 +111,46 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
   const [routeTargetId, setRouteTargetId] = useState<string | null>(null)
   const [routeInfo, setRouteInfo] = useState<{ distanceKm: string; walkMin: number; drivMin: number; name: string } | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
+  const [refreshCounter, setRefreshCounter] = useState(0)
+
+  // Real-time synchronization when places are added, updated, or deleted
+  useEffect(() => {
+    const handleUpdate = () => {
+      setRefreshCounter((c) => c + 1)
+    }
+
+    window.addEventListener('tourvista_places_updated', handleUpdate)
+
+    let bc: BroadcastChannel | null = null
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('tourvista_places_channel')
+        bc.onmessage = handleUpdate
+      }
+    } catch {}
+
+    let channel: any = null
+    if (isSupabaseConfigured) {
+      try {
+        channel = supabase
+          .channel('public:local_places')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'local_places' },
+            () => {
+              handleUpdate()
+            }
+          )
+          .subscribe()
+      } catch {}
+    }
+
+    return () => {
+      window.removeEventListener('tourvista_places_updated', handleUpdate)
+      if (bc) bc.close()
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [])
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -123,7 +163,7 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Live TripAdvisor Auto-Suggestions
+  // Live Auto-Suggestions (Local places + TripAdvisor)
   useEffect(() => {
     if (!searchInput || searchInput.trim().length < 2) {
       setSuggestions([])
@@ -217,7 +257,7 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
     return () => {
       live = false
     }
-  }, [category, currentLoc.city, activeSearch, me])
+  }, [category, currentLoc.city, activeSearch, me, refreshCounter])
 
   // 3. Filter and sort logic — merges TripAdvisor + local Supabase places
   const allPlaces = useMemo(() => [...places, ...localPlaces], [places, localPlaces])

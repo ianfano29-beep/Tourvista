@@ -123,6 +123,17 @@ export default function AdminDashboard({ onLogout }: Props) {
     ensureAdminSession().then(() => fetchPlaces())
   }, [])
 
+  const notifyPlacesUpdated = () => {
+    try {
+      window.dispatchEvent(new CustomEvent('tourvista_places_updated'))
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('tourvista_places_channel')
+        bc.postMessage({ type: 'places_updated', timestamp: Date.now() })
+        bc.close()
+      }
+    } catch {}
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: FormEvent) => {
@@ -149,12 +160,24 @@ export default function AdminDashboard({ onLogout }: Props) {
     }
     if (editingId) {
       const { error: err } = await supabase.from('local_places').update(payload).eq('id', editingId)
-      if (err) { flash(err.message, 'error') }
-      else { flash(`"${payload.name}" updated successfully.`, 'success'); closeForm(); fetchPlaces() }
+      if (err) {
+        flash(err.message, 'error')
+      } else {
+        flash(`"${payload.name}" updated successfully.`, 'success')
+        notifyPlacesUpdated()
+        closeForm()
+        fetchPlaces()
+      }
     } else {
       const { error: err } = await supabase.from('local_places').insert(payload)
-      if (err) { flash(err.message, 'error') }
-      else { flash(`"${payload.name}" added successfully.`, 'success'); closeForm(); fetchPlaces() }
+      if (err) {
+        flash(err.message, 'error')
+      } else {
+        flash(`"${payload.name}" added successfully.`, 'success')
+        notifyPlacesUpdated()
+        closeForm()
+        fetchPlaces()
+      }
     }
     setSaving(false)
   }
@@ -167,8 +190,13 @@ export default function AdminDashboard({ onLogout }: Props) {
     const target = places.find(p => p.id === deletingId)
     if (!target) return
     const { error: err } = await supabase.from('local_places').delete().eq('id', deletingId)
-    if (err) { flash(err.message, 'error') }
-    else { flash(`"${target.name}" deleted.`, 'success'); fetchPlaces() }
+    if (err) {
+      flash(err.message, 'error')
+    } else {
+      flash(`"${target.name}" deleted.`, 'success')
+      notifyPlacesUpdated()
+      fetchPlaces()
+    }
     setDeletingId(null)
     setDeleteConfirmName('')
   }

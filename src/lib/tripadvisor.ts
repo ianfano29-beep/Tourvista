@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { GENSAN_LOCAL_PLACES } from '../data/gensan_places'
 import type { Category, Place, Review } from '../types'
 
 const TRIPADVISOR_API_KEY =
@@ -134,45 +135,100 @@ function classifyCategory(mainUrl: string = '', name: string = ''): Category {
   return 'attractions'
 }
 
-// Live TripAdvisor Suggestions Auto-complete for selected City
+// Live Suggestions Auto-complete for selected City (Merges Local Curated Places + TripAdvisor)
 export async function fetchSearchSuggestions(query: string, city: string = 'General Santos'): Promise<SearchSuggestion[]> {
-  if (!query || query.trim().length < 2 || !TRIPADVISOR_API_KEY) return []
+  if (!query || query.trim().length < 2) return []
 
-  const headers = {
-    accept: 'application/json',
-    'X-API-KEY': TRIPADVISOR_API_KEY,
-  }
+  const q = query.trim().toLowerCase()
+  const suggestions: SearchSuggestion[] = []
+  const seenNames = new Set<string>()
 
-  try {
-    const q = query.trim().toLowerCase()
-    const searchRes = await fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(query + ' ' + city)}`, { headers })
-    if (searchRes.ok) {
-      const json = await searchRes.json()
-      const data = json.data || []
-      const matched = data
-        .map((item: any) => item.location || item)
-        .filter((loc: any) => {
-          const geo = (loc.geo || '').toLowerCase()
-          const name = (loc.names?.[0]?.value || '').toLowerCase()
-          const country = (loc.addresses?.[0]?.country_name || '').toLowerCase()
-          return (
-            country === 'philippines' ||
-            geo.includes(city.toLowerCase()) ||
-            name.includes(q)
-          )
+  // 1. Check local static places
+  GENSAN_LOCAL_PLACES.forEach((p, idx) => {
+    if (
+      p.name.toLowerCase().includes(q) ||
+      p.description?.toLowerCase().includes(q) ||
+      p.tags?.some((t) => t.toLowerCase().includes(q))
+    ) {
+      if (!seenNames.has(p.name.toLowerCase())) {
+        seenNames.add(p.name.toLowerCase())
+        suggestions.push({
+          id: `static_${idx}`,
+          name: p.name,
+          geo: 'Curated Local Place',
+          address: p.address || 'General Santos City',
         })
-
-      if (matched.length > 0) {
-        return matched.slice(0, 6).map((loc: any) => ({
-          id: String(loc.id),
-          name: loc.names?.[0]?.value || 'TripAdvisor Place',
-          geo: loc.geo,
-          address: loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address,
-        }))
       }
     }
-  } catch {}
-  return []
+  })
+
+  // 2. Check Supabase DB local places
+  if (isSupabaseConfigured) {
+    try {
+      const { data } = await supabase
+        .from('local_places')
+        .select('id, name, address, city')
+        .ilike('name', `%${q}%`)
+        .limit(4)
+
+      if (data && data.length > 0) {
+        data.forEach((row: any) => {
+          if (!seenNames.has(row.name.toLowerCase())) {
+            seenNames.add(row.name.toLowerCase())
+            suggestions.push({
+              id: `db_${row.id}`,
+              name: row.name,
+              geo: 'Curated Local Place',
+              address: row.address || row.city || 'General Santos City',
+            })
+          }
+        })
+      }
+    } catch {}
+  }
+
+  // 3. Check TripAdvisor API
+  if (TRIPADVISOR_API_KEY) {
+    const headers = {
+      accept: 'application/json',
+      'X-API-KEY': TRIPADVISOR_API_KEY,
+    }
+
+    try {
+      const searchRes = await fetch(`${TA_BASE}/catalog/locations/search?query=${encodeURIComponent(query + ' ' + city)}`, { headers })
+      if (searchRes.ok) {
+        const json = await searchRes.json()
+        const data = json.data || []
+        const matched = data
+          .map((item: any) => item.location || item)
+          .filter((loc: any) => {
+            const geo = (loc.geo || '').toLowerCase()
+            const name = (loc.names?.[0]?.value || '').toLowerCase()
+            const country = (loc.addresses?.[0]?.country_name || '').toLowerCase()
+            return (
+              country === 'philippines' ||
+              geo.includes(city.toLowerCase()) ||
+              name.includes(q)
+            )
+          })
+
+        matched.forEach((loc: any) => {
+          const locName = loc.names?.[0]?.value || 'TripAdvisor Place'
+          if (!seenNames.has(locName.toLowerCase()) && suggestions.length < 8) {
+            seenNames.add(locName.toLowerCase())
+            suggestions.push({
+              id: String(loc.id),
+              name: locName,
+              geo: loc.geo || city,
+              address: loc.addresses?.[0]?.formatted || loc.addresses?.[0]?.street_address,
+            })
+          }
+        })
+      }
+    } catch {}
+  }
+
+  return suggestions.slice(0, 8)
 }
 
 // Direct TripAdvisor Terra API Fetcher with Strict City Scoping
