@@ -134,8 +134,12 @@ export default function App() {
   const isGuest =
     !session &&
     (!guestUser ||
-      guestUser === 'traveler@wander.app' ||
-      guestUser === 'guest.traveler@tourvista.app')
+      guestUser.toLowerCase().includes('guest') ||
+      guestUser.toLowerCase().includes('explorer') ||
+      guestUser.toLowerCase().includes('traveler') ||
+      guestUser.toLowerCase().includes('demo') ||
+      guestUser.toLowerCase().endsWith('@tourvista.app') ||
+      guestUser.toLowerCase().endsWith('@wander.app'))
 
   return (
     <Dashboard

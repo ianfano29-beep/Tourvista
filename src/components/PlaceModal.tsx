@@ -43,6 +43,18 @@ export default function PlaceModal({
   const [submittingComment, setSubmittingComment] = useState(false)
   const [commentError, setCommentError] = useState('')
 
+  // Strictly identify any guest / demo / traveler session
+  const isGuestUser =
+    isGuest ||
+    !userEmail ||
+    userEmail === 'Traveler' ||
+    userEmail.toLowerCase().includes('guest') ||
+    userEmail.toLowerCase().includes('explorer') ||
+    userEmail.toLowerCase().includes('traveler') ||
+    userEmail.toLowerCase().includes('demo') ||
+    userEmail.toLowerCase().endsWith('@tourvista.app') ||
+    userEmail.toLowerCase().endsWith('@wander.app')
+
   // 1. Fetch TripAdvisor reviews if place is NOT local
   useEffect(() => {
     if (place.isLocal) return
@@ -104,8 +116,8 @@ export default function PlaceModal({
 
   const handleCommentSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (isGuest || !newComment.trim()) {
-      if (isGuest) {
+    if (isGuestUser || !newComment.trim()) {
+      if (isGuestUser) {
         setCommentError('Sign in with an account to post feedback and reviews.')
       }
       return
@@ -312,7 +324,7 @@ export default function PlaceModal({
             </div>
 
             {/* Review input form (Only for logged-in accounts) */}
-            {!isGuest ? (
+            {!isGuestUser ? (
               <form onSubmit={handleCommentSubmit} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700">
@@ -379,7 +391,7 @@ export default function PlaceModal({
               ) : comments.length === 0 ? (
                 <div className="rounded-2xl bg-slate-50/60 border border-slate-100 p-4 text-center">
                   <p className="text-xs text-slate-500">No feedback posted yet for this place.</p>
-                  {!isGuest && (
+                  {!isGuestUser && (
                     <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
                       Be the first to share your thoughts!
                     </p>
