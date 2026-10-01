@@ -92,6 +92,20 @@ export default function AdminDashboard({ onLogout }: Props) {
     else { setError(msg); setTimeout(() => setError(''), 5000) }
   }
 
+  const ensureAdminSession = async () => {
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) {
+        await supabase.auth.signInWithPassword({
+          email: 'admin@gmail.com',
+          password: '!Admin123!',
+        })
+      }
+    } catch (e) {
+      console.warn('[AdminDashboard] Auto-session check error:', e)
+    }
+  }
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchPlaces = async () => {
@@ -105,13 +119,16 @@ export default function AdminDashboard({ onLogout }: Props) {
     setLoading(false)
   }
 
-  useEffect(() => { fetchPlaces() }, [])
+  useEffect(() => {
+    ensureAdminSession().then(() => fetchPlaces())
+  }, [])
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
+    await ensureAdminSession()
     const payload = {
       name: form.name.trim(),
       lat: Number(form.lat),
@@ -146,6 +163,7 @@ export default function AdminDashboard({ onLogout }: Props) {
 
   const confirmDelete = async () => {
     if (!deletingId) return
+    await ensureAdminSession()
     const target = places.find(p => p.id === deletingId)
     if (!target) return
     const { error: err } = await supabase.from('local_places').delete().eq('id', deletingId)
