@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { APIProvider, AdvancedMarker, Map, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { fetchPlaces } from '../lib/tripadvisor'
+import { fetchLocalPlaces } from '../lib/localPlaces'
 import { km } from '../lib/geo'
 import { CATEGORIES, type Category, type LatLng, type Location, type Place } from '../types'
 import PlaceModal from './PlaceModal'
@@ -203,11 +204,41 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
     }
   })
   const [routeInfo, setRouteInfo] = useState('')
+  const [refreshCounter, setRefreshCounter] = useState(0)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY
 
   const latLong = nearMe && me ? `${me.lat},${me.lng}` : undefined
+
+  useEffect(() => {
+    const handleUpdate = () => setRefreshCounter((c) => c + 1)
+    window.addEventListener('tourvista_places_updated', handleUpdate)
+
+    let bc: BroadcastChannel | null = null
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('tourvista_places_channel')
+        bc.onmessage = handleUpdate
+      }
+    } catch {}
+
+    let channel: any = null
+    if (isSupabaseConfigured) {
+      try {
+        channel = supabase
+          .channel('public:local_places_mapview')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'local_places' }, handleUpdate)
+          .subscribe()
+      } catch {}
+    }
+
+    return () => {
+      window.removeEventListener('tourvista_places_updated', handleUpdate)
+      if (bc) bc.close()
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [])
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -242,10 +273,23 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
         .then(() => {})
     }
 
-    fetchPlaces(category, location.city, latLong)
-      .then((res) => {
+    Promise.all([
+      fetchPlaces(category, location.city, latLong),
+      fetchLocalPlaces(category, location.city),
+    ])
+      .then(([res, local]) => {
         if (live) {
-          setPlaces(res.places)
+          const combined = [...local, ...res.places]
+          const seen = new Set<string>()
+          const unique: Place[] = []
+          for (const p of combined) {
+            const key = p.name.toLowerCase().trim()
+            if (!seen.has(key)) {
+              seen.add(key)
+              unique.push(p)
+            }
+          }
+          setPlaces(unique)
           if (res.error) setError(res.error)
         }
       })
@@ -259,14 +303,14 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
     return () => {
       live = false
     }
-  }, [category, location, latLong])
+  }, [category, location, latLong, refreshCounter])
 
   const visible = useMemo(
     () =>
       places.filter(
         (p) =>
-          p.rating >= minRating &&
-          `${p.name} ${p.address}`.toLowerCase().includes(query.toLowerCase()) &&
+          ((p.rating || 0) >= minRating || p.isLocal) &&
+          `${p.name} ${p.address || ''} ${(p.tags || []).join(' ')}`.toLowerCase().includes(query.toLowerCase()) &&
           (!maxKm || !me || km(me, p) <= maxKm)
       ),
     [places, query, minRating, maxKm, me]
