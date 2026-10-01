@@ -7,6 +7,7 @@ import AuthPage from './components/AuthPage'
 import Dashboard from './components/Dashboard'
 import MapView from './components/MapView'
 import AdminDashboard from './components/AdminDashboard'
+import SplashScreen from './components/SplashScreen'
 
 // ─── Admin credentials (front-end gate; real security is via Supabase RLS) ───
 const ADMIN_EMAIL = 'admin@gmail.com'
@@ -17,6 +18,7 @@ export default function App() {
   const [guestUser, setGuestUser] = useState<string | null>(() => localStorage.getItem('wander_guest_email'))
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('tv_admin') === '1')
   const [ready, setReady] = useState(false)
+  const [showSplash, setShowSplash] = useState(true)
   const [location, setLocation] = useState<Location>(DEFAULT_LOCATION)
   const [category, setCategory] = useState<Category | null>(null)
 
@@ -91,6 +93,10 @@ export default function App() {
     setSession(null)
     setIsAdmin(false)
     setCategory(null)
+  }
+
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />
   }
 
   if (!ready) {
