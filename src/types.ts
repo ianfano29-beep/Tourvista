@@ -30,6 +30,8 @@ export interface Place extends LatLng {
   rank?: number
   phone?: string
   hours?: string
+  isLocal?: boolean        // true = sourced from Supabase local_places, not TripAdvisor
+  referenceUrl?: string   // external reference link (blog, wiki, FB page, etc.)
 }
 
 export interface Review {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchPlaces, fetchSearchSuggestions, type SearchSuggestion } from '../lib/tripadvisor'
+import { fetchLocalPlaces } from '../lib/localPlaces'
 import { km } from '../lib/geo'
 import { CATEGORIES, SUB_FILTERS, type Category, type LatLng, type Location, type Place } from '../types'
 import LocationModal from './LocationModal'
@@ -58,6 +59,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
   const [category, setCategory] = useState<Category>('attractions')
   const [subFilter, setSubFilter] = useState<string>('all')
   const [places, setPlaces] = useState<Place[]>([])
+  const [localPlaces, setLocalPlaces] = useState<Place[]>([])
   const [apiError, setApiError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -172,15 +174,21 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     setApiError(null)
     const latLong = me ? `${me.lat},${me.lng}` : undefined
 
-    fetchPlaces(category, currentLoc.city, latLong, activeSearch)
-      .then((res) => {
+    // Fetch TripAdvisor + local Supabase places in parallel
+    Promise.all([
+      fetchPlaces(category, currentLoc.city, latLong, activeSearch),
+      fetchLocalPlaces(category, currentLoc.city, activeSearch),
+    ])
+      .then(([taRes, localRes]) => {
         if (live) {
-          setPlaces(res.places)
-          if (res.error) {
-            setApiError(res.error)
+          setPlaces(taRes.places)
+          setLocalPlaces(localRes)
+          if (taRes.error) {
+            setApiError(taRes.error)
           }
-          if (res.places.length > 0) {
-            setSelectedId((prev) => (prev && res.places.some((p) => p.id === prev) ? prev : res.places[0].id))
+          const allResults = [...taRes.places, ...localRes]
+          if (allResults.length > 0) {
+            setSelectedId((prev) => (prev && allResults.some((p) => p.id === prev) ? prev : allResults[0].id))
           } else {
             setSelectedId(null)
           }
@@ -197,9 +205,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
     }
   }, [category, currentLoc.city, activeSearch, me])
 
-  // 3. Filter and sort logic
+  // 3. Filter and sort logic — merges TripAdvisor + local Supabase places
+  const allPlaces = useMemo(() => [...places, ...localPlaces], [places, localPlaces])
+
   const filteredPlaces = useMemo(() => {
-    return places
+    return allPlaces
       .filter((p) => {
         if (activeTab === 'saved' && !saved.has(p.id)) return false
         if (subFilter !== 'all' && p.subCategory && p.subCategory !== subFilter) return false
@@ -224,11 +234,11 @@ export default function Dashboard({ email, location, onLogout }: Props) {
         if (sortBy === 'reviews') return (b.reviewCount || 0) - (a.reviewCount || 0)
         return 0
       })
-  }, [places, activeTab, saved, subFilter, selectedCluster, searchInput, activeSearch, minRating45, within2km, moderatePrice, onlyOpen, sortBy, me])
+  }, [allPlaces, activeTab, saved, subFilter, selectedCluster, searchInput, activeSearch, minRating45, within2km, moderatePrice, onlyOpen, sortBy, me])
 
   const selectedPlace = useMemo(() => {
-    return places.find((p) => p.id === selectedId) || filteredPlaces[0] || null
-  }, [places, selectedId, filteredPlaces])
+    return allPlaces.find((p) => p.id === selectedId) || filteredPlaces[0] || null
+  }, [allPlaces, selectedId, filteredPlaces])
 
   // 4. Initialize Leaflet Map
   useEffect(() => {
@@ -339,22 +349,28 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
     filteredPlaces.forEach((p) => {
       const isSelected = p.id === selectedId
-      const bgColor = isSelected ? '#f59e0b' : '#064e3b'
+      const isLocal = p.isLocal === true
+
+      // Color scheme: amber=selected, purple=local, green=TripAdvisor
+      const bgColor = isSelected ? '#f59e0b' : isLocal ? '#7c3aed' : '#064e3b'
       const textColor = isSelected ? '#1c1917' : '#ffffff'
-      const arrowColor = isSelected ? '#f59e0b' : '#064e3b'
+      const arrowColor = isSelected ? '#f59e0b' : isLocal ? '#7c3aed' : '#064e3b'
       const scale = isSelected ? 'scale(1.25)' : 'scale(1)'
       const shadow = isSelected
         ? '0 0 0 4px rgba(245,158,11,0.4), 0 4px 12px rgba(0,0,0,0.3)'
+        : isLocal
+        ? '0 0 0 3px rgba(124,58,237,0.25), 0 2px 8px rgba(0,0,0,0.25)'
         : '0 2px 8px rgba(0,0,0,0.25)'
       const shortName = p.name.split(' ').slice(0, 3).join(' ')
+      const labelIcon = isLocal ? '📌' : `★${p.rating > 0 ? p.rating.toFixed(1) : 'TA'}`
 
       const markerHtml = `
         <div style="display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.2s;cursor:pointer">
           <div style="display:flex;align-items:center;gap:4px;background:${bgColor};color:${textColor};padding:4px 10px;border-radius:9999px;font-size:11px;font-weight:700;border:2px solid white;box-shadow:${shadow}">
-            <span>★${p.rating > 0 ? p.rating.toFixed(1) : 'TA'}</span>
+            <span>${labelIcon}</span>
           </div>
           <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${arrowColor};margin-top:-1px"></div>
-          <span style="margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(255,255,255,0.97);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);border:1px solid #e2e8f0">${shortName}</span>
+          <span style="margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(255,255,255,0.97);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);border:1px solid ${isLocal ? '#ddd6fe' : '#e2e8f0'}">${shortName}</span>
         </div>
       `
 
@@ -798,6 +814,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
 
               {filteredPlaces.map((p, idx) => {
                 const isSelected = p.id === selectedId
+                const isLocal = p.isLocal === true
 
                 return (
                   <div
@@ -808,7 +825,9 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                     onClick={() => handleSelectPlace(p.id)}
                     className={`group relative rounded-2xl bg-white transition duration-200 cursor-pointer border ${
                       isSelected
-                        ? 'border-emerald-600 ring-2 ring-emerald-600/30 shadow-md'
+                        ? isLocal
+                          ? 'border-violet-500 ring-2 ring-violet-500/30 shadow-md'
+                          : 'border-emerald-600 ring-2 ring-emerald-600/30 shadow-md'
                         : 'border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
                     }`}
                   >
@@ -819,7 +838,12 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                           alt={p.name}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         />
-                        {p.price && (
+                        {isLocal && (
+                          <span className="absolute top-1.5 left-1.5 rounded-full bg-violet-600/90 backdrop-blur-xs px-2 py-0.5 text-[10px] font-bold text-white shadow-sm flex items-center gap-0.5">
+                            📌 Local
+                          </span>
+                        )}
+                        {!isLocal && p.price && (
                           <span className="absolute top-1.5 left-1.5 rounded bg-slate-950/75 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
                             {p.price}
                           </span>
@@ -829,7 +853,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                       <div className="flex-1 min-w-0 flex flex-col justify-between">
                         <div>
                           <div className="flex items-start justify-between gap-1.5">
-                            <h3 className="text-sm font-bold text-slate-900 leading-snug truncate group-hover:text-emerald-800">
+                            <h3 className={`text-sm font-bold text-slate-900 leading-snug truncate ${isLocal ? 'group-hover:text-violet-700' : 'group-hover:text-emerald-800'}`}>
                               #{idx + 1} {p.name}
                             </h3>
                             <button
@@ -854,16 +878,24 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                           </div>
 
                           <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-600">
-                            {p.rating > 0 && (
-                              <span className="font-bold text-amber-600 flex items-center gap-0.5">
-                                ★ {p.rating.toFixed(1)}
+                            {isLocal ? (
+                              <span className="font-semibold text-violet-700 flex items-center gap-0.5 text-[11px]">
+                                📌 Locally curated place
                               </span>
+                            ) : (
+                              <>
+                                {p.rating > 0 && (
+                                  <span className="font-bold text-amber-600 flex items-center gap-0.5">
+                                    ★ {p.rating.toFixed(1)}
+                                  </span>
+                                )}
+                                {p.reviewCount ? (
+                                  <span className="text-slate-400 text-[11px]">
+                                    ({p.reviewCount.toLocaleString()} reviews)
+                                  </span>
+                                ) : null}
+                              </>
                             )}
-                            {p.reviewCount ? (
-                              <span className="text-slate-400 text-[11px]">
-                                ({p.reviewCount.toLocaleString()} reviews)
-                              </span>
-                            ) : null}
                           </div>
 
                           {p.address && (
@@ -876,7 +908,7 @@ export default function Dashboard({ email, location, onLogout }: Props) {
                             {p.tags?.slice(0, 2).map((tag, tIdx) => (
                               <span
                                 key={tIdx}
-                                className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                                className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isLocal ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'}`}
                               >
                                 {tag}
                               </span>
