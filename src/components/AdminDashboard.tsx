@@ -4,7 +4,7 @@ import TourVistaLogo from './TourVistaLogo'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Category = 'restaurants' | 'hotels' | 'tours' | 'attractions' | 'inspire'
+type Category = 'restaurants' | 'hotels' | 'tours' | 'attractions' | 'inspire' | 'heritage'
 
 interface LocalPlace {
   id: string
@@ -40,6 +40,7 @@ const BLANK_FORM: Omit<LocalPlace, 'id' | 'created_at'> = {
 
 const CATEGORIES: { id: Category; label: string }[] = [
   { id: 'attractions', label: 'Attractions' },
+  { id: 'heritage', label: 'Heritage' },
   { id: 'restaurants', label: 'Restaurants' },
   { id: 'hotels', label: 'Hotels' },
   { id: 'tours', label: 'Tours' },
