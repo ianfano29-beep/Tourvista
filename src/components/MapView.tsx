@@ -310,7 +310,7 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
       places.filter(
         (p) =>
           ((p.rating || 0) >= minRating || p.isLocal) &&
-          `${p.name} ${p.address || ''} ${(p.tags || []).join(' ')}`.toLowerCase().includes(query.toLowerCase()) &&
+          `${p.name} ${p.address || ''} ${p.category || ''} ${p.description || ''} ${(p.tags || []).join(' ')}`.toLowerCase().includes(query.toLowerCase()) &&
           (!maxKm || !me || km(me, p) <= maxKm)
       ),
     [places, query, minRating, maxKm, me]

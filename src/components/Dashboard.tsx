@@ -268,13 +268,14 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
         if (activeTab === 'saved' && !saved.has(p.id)) return false
         if (subFilter !== 'all' && p.subCategory && p.subCategory !== subFilter) return false
         if (selectedCluster !== 'all' && p.cluster !== selectedCluster) return false
-        if (searchInput && !activeSearch) {
-          const q = searchInput.toLowerCase()
+        const searchTarget = (activeSearch || searchInput).trim().toLowerCase()
+        if (searchTarget) {
           const matches =
-            p.name.toLowerCase().includes(q) ||
-            (p.address && p.address.toLowerCase().includes(q)) ||
-            (p.category && p.category.toLowerCase().includes(q)) ||
-            (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
+            p.name.toLowerCase().includes(searchTarget) ||
+            (p.address && p.address.toLowerCase().includes(searchTarget)) ||
+            (p.category && p.category.toLowerCase().includes(searchTarget)) ||
+            (p.description && p.description.toLowerCase().includes(searchTarget)) ||
+            (p.tags && p.tags.some((t) => t.toLowerCase().includes(searchTarget)))
           if (!matches) return false
         }
         if (minRating45 && (p.rating || 0) < 4.5 && !p.isLocal) return false
