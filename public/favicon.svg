@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <!-- Clip path to keep mountains and sky inside the circular emblem -->
+    <clipPath id="circle-clip">
+      <circle cx="100" cy="95" r="76" />
+    </clipPath>
+  </defs>
+
+  <!-- Outer Ring Shadow / Base -->
+  <circle cx="100" cy="95" r="78" fill="#0b172a" />
+
+  <!-- Outer Teal Border Ring -->
+  <circle cx="100" cy="95" r="78" stroke="#00A896" stroke-width="8" fill="#08182b" />
+
+  <!-- Inner Dark Blue Sky -->
+  <g clip-path="url(#circle-clip)">
+    <!-- Deep Navy / Blue Sky -->
+    <rect x="0" y="0" width="200" height="200" fill="#08182b" />
+
+    <!-- Golden Sun in top right -->
+    <circle cx="138" cy="62" r="18" fill="#F59E0B" />
+
+    <!-- Left Cyan/Mint Mountain Peak -->
+    <polygon points="18,170 75,76 122,156" fill="#38BDF8" />
+    <polygon points="18,170 75,76 86,170" fill="#2DD4BF" opacity="0.9" />
+
+    <!-- Right White/Silver Mountain Peak -->
+    <polygon points="62,170 128,68 185,170" fill="#FFFFFF" />
+    <!-- Mountain Shadow Facet -->
+    <polygon points="128,68 128,170 185,170" fill="#E2E8F0" />
+    <!-- Mountain Left Facet (Light Mint Blend) -->
+    <polygon points="62,170 128,68 128,170" fill="#F8FAFC" />
+
+    <!-- Overlapping Mountain Accent (Foreground left peak) -->
+    <polygon points="20,170 74,78 116,145 74,170" fill="#22D3EE" />
+
+    <!-- Winding Golden Trail / Path -->
+    <path
+      d="M 100 118 C 108 126, 116 138, 108 152 C 100 165, 88 172, 88 185"
+      fill="none"
+      stroke="#F59E0B"
+      stroke-width="7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+
+  <!-- Bottom Teal Arc Accent -->
+  <path
+    d="M 62 166 C 84 176, 116 176, 138 166 C 126 179, 74 179, 62 166 Z"
+    fill="#00A896"
+  />
+</svg>

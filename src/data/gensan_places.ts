@@ -1,95 +1,50 @@
-/**
- * ============================================================
- *  GENSAN LOCAL PLACES — Static Data File
- * ============================================================
- *  Add your places here following the sample format below.
- *
- *  FIELDS:
- *   name         — Name of the place
- *   lat / lng    — Coordinates from Google Maps (right-click → "Copy coordinates")
- *   image        — Direct image URL (Google, Facebook, or any public image link)
- *   reference    — Link to more info (Facebook page, Wikipedia, blog, etc.)
- *   description  — Short description of the place
- *   category     — ONE of: 'attractions' | 'restaurants' | 'hotels' | 'tours' | 'inspire'
- *   address      — Street or barangay address
- *   tags         — Keywords (for search filtering)
- *   rating       — Your own rating out of 5 (e.g. 4.8), or 0 if none
- * ============================================================
- */
-
 import type { Place } from '../types'
 
 export const GENSAN_LOCAL_PLACES: Omit<Place, 'id'>[] = [
-  // ──────────────────────────────────────────────
-  //  BEACHES & NATURE
-  // ──────────────────────────────────────────────
-  {
-    name: 'Isla Vista Beach Resort',
-    lat: 6.0485,
-    lng: 125.1603,
-    photo: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80',
-    url: 'https://www.facebook.com/IslaVistaPH',
-    referenceUrl: 'https://www.facebook.com/IslaVistaPH',
-    description: 'A beautiful beachfront resort with clear blue waters and white sand shores along Sarangani Bay.',
-    category: 'attractions',
-    address: 'Barangay Tambler, General Santos City',
-    tags: ['beach', 'resort', 'swimming', 'sarangani'],
-    rating: 4.5,
-    isLocal: true,
-  },
-  {
-    name: 'Sarangani Bay National Protected Seascape',
-    lat: 6.0523,
-    lng: 125.1602,
-    photo: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800&q=80',
-    url: 'https://en.wikipedia.org/wiki/Sarangani_Bay',
-    referenceUrl: 'https://en.wikipedia.org/wiki/Sarangani_Bay',
-    description: 'Protected marine area and scenic bay known for its rich biodiversity and stunning sunsets.',
-    category: 'attractions',
-    address: 'Sarangani Bay, General Santos City',
-    tags: ['bay', 'nature', 'marine', 'protected area', 'sunset'],
-    rating: 4.8,
-    isLocal: true,
-  },
 
-  // ──────────────────────────────────────────────
-  //  RESTAURANTS & FOOD
-  // ──────────────────────────────────────────────
   {
-    name: 'Tuna Capital Grill',
-    lat: 6.1126,
-    lng: 125.1716,
-    photo: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80',
-    url: 'https://www.facebook.com',
-    referenceUrl: 'https://www.facebook.com',
-    description: 'Famous for fresh bluefin and yellowfin tuna dishes straight from the General Santos fish port.',
-    category: 'restaurants',
-    address: 'National Highway, General Santos City',
-    tags: ['tuna', 'seafood', 'Filipino food', 'local', 'fresh fish'],
-    rating: 4.6,
+    name: 'General Santos City Oval Plaza',
+    lat: 6.112430883354463,
+    lng: 125.17333483946027,
+    photo: 'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/19/78/75/dc/20190927-145858-largejpg.jpg?w=800&h=800&s=1',
+    url: 'https://gensantourism.gensantos.gov.ph/experience',
+    referenceUrl: 'https://gensantourism.gensantos.gov.ph/experience',
+    description: 'Public space used for cultural, sports, and community activities.',
+    category: 'attractions',
+    address: '458C+7Q2, General Santos City (Dadiangas), 9500 South Cotabato',
+    tags: ['plaza', 'public space', 'cultural', 'sports', 'community'],
+    rating: 4.3,
     isLocal: true,
   },
-
-  // ──────────────────────────────────────────────
-  //  HOTELS & RESORTS
-  // ──────────────────────────────────────────────
   {
-    name: 'East Asia Royale Hotel',
-    lat: 6.1135,
-    lng: 125.1724,
-    photo: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80',
-    url: 'https://www.eastasiaroyale.com',
-    referenceUrl: 'https://www.eastasiaroyale.com',
-    description: 'Premier hotel in the heart of General Santos City offering deluxe rooms and business amenities.',
-    category: 'hotels',
-    address: 'Pioneer Avenue, General Santos City',
-    tags: ['hotel', 'business', 'deluxe', 'city center'],
+    name: 'SM City General Santos',
+    lat: 6.115616074970451,
+    lng: 125.18102552519063,
+    photo: 'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0b/40/3e/16/sm-city-general-santos.jpg?w=800&h=800&s=1',
+    url: 'https://www.smsupermalls.com/mall-directory/sm-city-general-santos',
+    referenceUrl: 'https://gensantourism.gensantos.gov.ph/experience',
+    description: 'Major shopping, dining, and entertainment destination in General Santos City.',
+    category: 'attractions',
+    address: 'Santiago Blvd, General Santos City, 9500 South Cotabato',
+    tags: ['mall', 'shopping', 'dining', 'entertainment'],
     rating: 4.4,
     isLocal: true,
   },
+  {
+    name: 'Queen Tuna Park',
+    lat: 6.106919408032654,
+    lng: 125.1755123,
+    photo: 'https://lh3.googleusercontent.com/gps-cs-s/ANWiy9RfP0l_0uS9LGq5et4Dunnlxs1sUobWtjyl3EqqsYR7hTomfDtXcoEHxDHtEjkxFnVX50Kx9K0n7QJRJVSoaCKl0DkPkEHFJeP6R9b6c4LLcwNQtmHExvkpTTu0MU4AeUWKuH_jVA=s680-w680-h510-rw',
+    url: 'https://gensantourism.gensantos.gov.ph/experience',
+    referenceUrl: 'https://gensantourism.gensantos.gov.ph/experience',
+    description: 'Lawned city park on Sarangani Bay with beachside cabanas & a number of trees for shade.',
+    category: 'attractions',
+    address: 'Brgy. Dadiangas South, General Santos City',
+    tags: ['park', 'bay', 'beachside', 'cabanas'],
+    rating: 3.8,
+    isLocal: true,
+  },
 
-  // ──────────────────────────────────────────────
-  //  ADD YOUR OWN PLACES BELOW ↓
-  //  Copy any block above and edit the values.
-  // ──────────────────────────────────────────────
+
+
 ]

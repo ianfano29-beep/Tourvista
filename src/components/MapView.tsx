@@ -445,7 +445,7 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
                   </p>
                 )}
                 <p className="line-clamp-1 text-xs text-stone-500">{p.address}</p>
-                <div className="flex gap-2 pt-1.5">
+                <div className="flex gap-2 pt-1.5 flex-wrap">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -455,6 +455,31 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
                   >
                     View details
                   </button>
+                  {p.isLocal ? (
+                    (p.referenceUrl || p.url) && (
+                      <a
+                        href={p.referenceUrl || p.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 transition flex items-center"
+                      >
+                        Reference URL ↗
+                      </a>
+                    )
+                  ) : (
+                    p.url && (
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100 transition flex items-center gap-1"
+                      >
+                        TripAdvisor ↗
+                      </a>
+                    )
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -498,7 +523,7 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
                     zIndex={p.id === selectedId ? 10 : 1}
                   >
                     <Pin
-                      background={p.id === selectedId ? '#f59e0b' : '#115e59'}
+                      background={p.id === selectedId ? '#f59e0b' : p.isLocal ? '#7c3aed' : '#115e59'}
                       borderColor="#042f2e"
                       glyphColor="#fff"
                       scale={p.id === selectedId ? 1.3 : 1}
@@ -518,11 +543,42 @@ export default function MapView({ location, initialCategory, onBack }: Props) {
           )}
 
           {selected && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-xl bg-white/95 backdrop-blur-xs px-4 py-2.5 text-xs shadow-xl border border-stone-200 z-30 max-w-sm w-[90%] sm:w-auto text-center">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-xl bg-white/95 backdrop-blur-xs px-4 py-2.5 text-xs shadow-xl border border-stone-200 z-30 max-w-sm w-[90%] sm:w-auto text-center flex flex-col items-center gap-1.5">
               <p className="font-semibold text-stone-900">{selected.name}</p>
-              <p className="text-stone-500 mt-0.5">
+              <p className="text-stone-500 text-[11px]">
                 {routeInfo || (me ? 'Calculating direct distance…' : 'Enable location to see route distance')}
               </p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap justify-center">
+                <button
+                  onClick={() => setDetail(selected)}
+                  className="rounded-lg bg-teal-800 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-900 transition cursor-pointer"
+                >
+                  View details
+                </button>
+                {selected.isLocal ? (
+                  (selected.referenceUrl || selected.url) && (
+                    <a
+                      href={selected.referenceUrl || selected.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 transition"
+                    >
+                      Reference URL ↗
+                    </a>
+                  )
+                ) : (
+                  selected.url && (
+                    <a
+                      href={selected.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 transition"
+                    >
+                      TripAdvisor Page ↗
+                    </a>
+                  )
+                )}
+              </div>
             </div>
           )}
         </main>

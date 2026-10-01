@@ -54,3 +54,34 @@ alter table local_places enable row level security;
 
 -- Anyone (including unauthenticated visitors) can read local places
 create policy "public read" on local_places for select using (true);
+
+-- Authenticated users whose email is admin@gmail.com can insert / update / delete
+-- NOTE: Run this in the Supabase SQL Editor after creating the admin account.
+create policy "admin write" on local_places for all
+  using    (auth.email() = 'admin@gmail.com')
+  with check (auth.email() = 'admin@gmail.com');
+
+-- Visitor Comments & Feedback for Local Curated Places
+create table place_comments (
+  id            uuid primary key default gen_random_uuid(),
+  place_id      text not null,
+  user_id       uuid not null default auth.uid() references auth.users on delete cascade,
+  user_email    text not null,
+  rating        int not null default 5 check (rating >= 1 and rating <= 5),
+  comment       text not null check (char_length(trim(comment)) > 0),
+  created_at    timestamptz default now()
+);
+
+alter table place_comments enable row level security;
+
+-- Public can view all comments on local places
+create policy "public read comments" on place_comments for select using (true);
+
+-- Only logged-in (authenticated) users can insert feedback
+create policy "authenticated insert comments" on place_comments for insert
+  with check (auth.uid() = user_id);
+
+-- Users can delete their own comments if needed
+create policy "own comments delete" on place_comments for delete
+  using (auth.uid() = user_id);
+

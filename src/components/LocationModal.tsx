@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PHILIPPINES_REGIONS } from '../lib/locations'
-import { CATEGORIES, type Category, type Location } from '../types'
+import { type Category, type Location } from '../types'
 import { fetchSearchSuggestions, type SearchSuggestion } from '../lib/tripadvisor'
 
 interface Props {
@@ -30,7 +30,7 @@ export default function LocationModal({
     const cities = PHILIPPINES_REGIONS[initial.region] ?? []
     return cities.includes(initial.city) ? initial.city : cities[0] ?? 'General Santos'
   })
-  const [category, setCategory] = useState<Category>(initialCategory)
+
   const [searchQuery, setSearchQuery] = useState(initialSearch)
 
   // Live TripAdvisor suggestions
@@ -96,7 +96,7 @@ export default function LocationModal({
   const handleSubmit = () => {
     onSelect(
       { country: COUNTRY, region, city },
-      category,
+      undefined,
       searchQuery.trim() || undefined
     )
   }
@@ -190,8 +190,11 @@ export default function LocationModal({
             )}
           </label>
           <div className="relative flex items-center">
-            <span className="absolute left-3.5 text-slate-400 pointer-events-none text-sm">
-              🔍
+            <span className="absolute left-3.5 text-slate-400 pointer-events-none">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
             </span>
             <input
               type="text"
@@ -207,9 +210,7 @@ export default function LocationModal({
               className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition shadow-2xs"
             />
             {suggestionsLoading && (
-              <span className="absolute right-3 text-xs text-emerald-600 animate-spin">
-                ⏳
-              </span>
+              <span className="absolute right-3 h-3.5 w-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></span>
             )}
           </div>
 
@@ -227,7 +228,6 @@ export default function LocationModal({
                     onClick={() => handleSelectSuggestion(item)}
                     className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 transition flex items-start gap-2 cursor-pointer group"
                   >
-                    <span className="text-emerald-700 text-xs mt-0.5">📍</span>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 truncate">
                         {item.name}
@@ -250,27 +250,7 @@ export default function LocationModal({
           )}
         </div>
 
-        {/* Category Selection */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Category</label>
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCategory(c.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                  category === c.id
-                    ? 'border-emerald-700 bg-emerald-800 text-white shadow-xs'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <span>{c.icon}</span>
-                <span>{c.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -284,9 +264,8 @@ export default function LocationModal({
           <button
             type="button"
             onClick={handleSubmit}
-            className="rounded-xl bg-emerald-800 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-900 transition cursor-pointer shadow-xs flex items-center gap-1.5"
+            className="rounded-xl bg-emerald-800 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-900 transition cursor-pointer shadow-xs flex items-center"
           >
-            <span>🗺️</span>
             Explore on Map →
           </button>
         </div>

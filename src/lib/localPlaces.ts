@@ -36,19 +36,14 @@ export async function fetchLocalPlaces(
   // 2. Optional Supabase overlay (only if credentials are set)
   if (isSupabaseConfigured) {
     try {
-      let query = supabase
+      const { data } = await supabase
         .from('local_places')
         .select('*')
         .ilike('city', `%${city.split(' ')[0]}%`)
         .eq('category', category)
 
-      if (q) {
-        query = query.ilike('name', `%${q}%`)
-      }
-
-      const { data } = await query
       if (data && data.length > 0) {
-        const dbPlaces = data.map((row: any) => ({
+        let dbPlaces = data.map((row: any) => ({
           id: `db_local_${row.id}`,
           name: row.name,
           lat: row.lat,
@@ -64,6 +59,15 @@ export async function fetchLocalPlaces(
           reviewCount: 0,
           isLocal: true,
         })) as Place[]
+
+        // Client-side filter by search query (name, description, or tags)
+        if (q) {
+          dbPlaces = dbPlaces.filter((p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.description?.toLowerCase().includes(q) ||
+            p.tags?.some((t) => t.toLowerCase().includes(q))
+          )
+        }
 
         // Merge: static first, then DB additions (no duplicates by name)
         const existingNames = new Set(staticResults.map((p) => p.name.toLowerCase()))
