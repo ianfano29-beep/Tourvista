@@ -50,6 +50,9 @@ export interface SearchSuggestion {
   name: string
   geo?: string
   address?: string
+  category?: Category
+  lat?: number
+  lng?: number
 }
 
 export const CATEGORY_PHOTOS: Record<Category, string> = {
@@ -153,10 +156,13 @@ export async function fetchSearchSuggestions(query: string, city: string = 'Gene
       if (!seenNames.has(p.name.toLowerCase())) {
         seenNames.add(p.name.toLowerCase())
         suggestions.push({
-          id: `static_${idx}`,
+          id: `static_local_${idx}_${p.name.replace(/\s+/g, '_')}`,
           name: p.name,
           geo: 'Curated Local Place',
           address: p.address || 'General Santos City',
+          category: p.category,
+          lat: p.lat,
+          lng: p.lng,
         })
       }
     }
@@ -167,19 +173,22 @@ export async function fetchSearchSuggestions(query: string, city: string = 'Gene
     try {
       const { data } = await supabase
         .from('local_places')
-        .select('id, name, address, city')
+        .select('id, name, address, city, category, lat, lng')
         .ilike('name', `%${q}%`)
-        .limit(4)
+        .limit(6)
 
       if (data && data.length > 0) {
         data.forEach((row: any) => {
           if (!seenNames.has(row.name.toLowerCase())) {
             seenNames.add(row.name.toLowerCase())
             suggestions.push({
-              id: `db_${row.id}`,
+              id: `db_local_${row.id}`,
               name: row.name,
               geo: 'Curated Local Place',
               address: row.address || row.city || 'General Santos City',
+              category: row.category as Category,
+              lat: Number(row.lat) || 6.1164,
+              lng: Number(row.lng) || 125.1716,
             })
           }
         })

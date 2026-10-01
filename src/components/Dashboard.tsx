@@ -272,11 +272,12 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
           const q = searchInput.toLowerCase()
           const matches =
             p.name.toLowerCase().includes(q) ||
-            p.address.toLowerCase().includes(q) ||
+            (p.address && p.address.toLowerCase().includes(q)) ||
+            (p.category && p.category.toLowerCase().includes(q)) ||
             (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
           if (!matches) return false
         }
-        if (minRating45 && p.rating < 4.5) return false
+        if (minRating45 && (p.rating || 0) < 4.5 && !p.isLocal) return false
         if (within2km && me && km(me, p) > 2.0) return false
         if (moderatePrice && p.price && !p.price.includes('$$') && !p.price.includes('€€') && !p.price.includes('₱₱')) return false
         if (onlyOpen && p.openStatus && p.openStatus.toLowerCase().includes('closed')) return false
@@ -284,7 +285,7 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
       })
       .sort((a, b) => {
         if (sortBy === 'distance' && me) return km(me, a) - km(me, b)
-        if (sortBy === 'rating') return b.rating - a.rating
+        if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0)
         if (sortBy === 'reviews') return (b.reviewCount || 0) - (a.reviewCount || 0)
         return 0
       })
@@ -753,6 +754,13 @@ export default function Dashboard({ email, isGuest = false, location, onLogout }
     setSearchInput(suggestion.name)
     setActiveSearch(suggestion.name)
     setShowSuggestions(false)
+    if (suggestion.category) {
+      setCategory(suggestion.category)
+    }
+    setSelectedId(suggestion.id)
+    if (suggestion.lat && suggestion.lng && mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([suggestion.lat, suggestion.lng], 15, { duration: 0.8 })
+    }
   }
 
   const handleQuickSearch = (queryText: string, targetCategory?: Category) => {
