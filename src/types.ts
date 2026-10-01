@@ -1,4 +1,13 @@
-export type Category = 'restaurants' | 'hotels' | 'tours' | 'attractions' | 'inspire' | 'heritage'
+export type Category =
+  | 'restaurants'
+  | 'hotels'
+  | 'tours'
+  | 'attractions'
+  | 'inspire'
+  | 'heritage'
+  | 'shopping'
+  | 'beaches'
+  | 'religious'
 
 export interface LatLng {
   lat: number
@@ -45,7 +54,10 @@ export interface Review {
 
 export const CATEGORIES: { id: Category; label: string; icon: string }[] = [
   { id: 'attractions', label: 'Popular sights', icon: '🏛️' },
+  { id: 'beaches', label: 'Beaches & Coastal', icon: '🏖️' },
+  { id: 'shopping', label: 'Shopping & Markets', icon: '🛍️' },
   { id: 'heritage', label: 'Heritage', icon: '🏺' },
+  { id: 'religious', label: 'Religious & Churches', icon: '⛪' },
   { id: 'restaurants', label: 'Restaurants', icon: '🍴' },
   { id: 'hotels', label: 'Hotels', icon: '🏨' },
   { id: 'tours', label: 'Tours', icon: '🚶' },

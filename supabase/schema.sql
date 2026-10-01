@@ -42,7 +42,7 @@ create table local_places (
   image_url     text not null,
   reference_url text,
   description   text,
-  category      text not null check (category in ('restaurants','hotels','tours','attractions','inspire','heritage')),
+  category      text not null check (category in ('restaurants','hotels','tours','attractions','inspire','heritage','shopping','beaches','religious')),
   address       text,
   tags          text[],
   rating        float4 default 0,
