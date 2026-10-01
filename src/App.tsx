@@ -131,10 +131,16 @@ export default function App() {
     )
   }
 
+  const isGuest =
+    !session &&
+    (!guestUser ||
+      guestUser === 'traveler@wander.app' ||
+      guestUser === 'guest.traveler@tourvista.app')
+
   return (
     <Dashboard
       email={userEmail}
-      isGuest={!session}
+      isGuest={isGuest}
       location={location}
       onSelect={(l: Location, c: Category) => {
         setLocation(l)

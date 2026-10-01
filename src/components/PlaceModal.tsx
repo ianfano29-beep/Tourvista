@@ -60,85 +60,94 @@ export default function PlaceModal({
     }
   }, [place.id, place.isLocal])
 
-  // 2. Fetch Local place comments from Supabase if place IS local
+  // 2. Fetch visitor comments from localStorage and Supabase for all places
   const fetchLocalComments = async () => {
-    if (!place.isLocal || !isSupabaseConfigured) return
     setLoadingComments(true)
     try {
-      const { data, error } = await supabase
-        .from('place_comments')
-        .select('*')
-        .eq('place_id', place.id)
-        .order('created_at', { ascending: false })
-
-      if (!error && data) {
-        setComments(data as LocalComment[])
+      const stored = localStorage.getItem(`tv_comments_${place.id}`)
+      if (stored) {
+        setComments(JSON.parse(stored))
       }
-    } catch (err) {
-      console.warn('Error fetching place comments:', err)
-    } finally {
-      setLoadingComments(false)
+    } catch {}
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('place_comments')
+          .select('*')
+          .eq('place_id', place.id)
+          .order('created_at', { ascending: false })
+
+        if (!error && data && data.length > 0) {
+          setComments((prev) => {
+            const combined = [...(data as LocalComment[])]
+            prev.forEach((pItem) => {
+              if (!combined.some((c) => c.id === pItem.id)) {
+                combined.push(pItem)
+              }
+            })
+            return combined.sort(
+              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            )
+          })
+        }
+      } catch (err) {
+        console.warn('Error fetching place comments from DB:', err)
+      }
     }
+    setLoadingComments(false)
   }
 
   useEffect(() => {
-    if (place.isLocal) {
-      fetchLocalComments()
-    }
-  }, [place.id, place.isLocal])
+    fetchLocalComments()
+  }, [place.id])
 
   const handleCommentSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (isGuest || !newComment.trim()) return
+    if (!newComment.trim()) return
 
     setSubmittingComment(true)
     setCommentError('')
 
-    try {
-      if (!isSupabaseConfigured) {
-        // Optimistic local add if Supabase is offline
-        const mockItem: LocalComment = {
-          id: `local_temp_${Date.now()}`,
-          place_id: place.id,
-          user_email: userEmail,
-          rating: commentRating,
-          comment: newComment.trim(),
-          created_at: new Date().toISOString(),
-        }
-        setComments((prev) => [mockItem, ...prev])
-        setNewComment('')
-        setSubmittingComment(false)
-        return
-      }
-
-      const { data: authData } = await supabase.auth.getUser()
-      const userId = authData?.user?.id
-
-      if (!userId) {
-        setCommentError('Please sign in with your account to post feedback.')
-        setSubmittingComment(false)
-        return
-      }
-
-      const { error } = await supabase.from('place_comments').insert({
-        place_id: place.id,
-        user_id: userId,
-        user_email: userEmail,
-        rating: commentRating,
-        comment: newComment.trim(),
-      })
-
-      if (error) {
-        setCommentError(error.message)
-      } else {
-        setNewComment('')
-        fetchLocalComments()
-      }
-    } catch (err: any) {
-      setCommentError(err?.message || 'Error submitting feedback')
-    } finally {
-      setSubmittingComment(false)
+    const commentEmail = userEmail && userEmail.trim() ? userEmail.trim() : 'Traveler'
+    const newCommentItem: LocalComment = {
+      id: `comment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      place_id: place.id,
+      user_email: commentEmail,
+      rating: commentRating,
+      comment: newComment.trim(),
+      created_at: new Date().toISOString(),
     }
+
+    // Save to state and localStorage immediately
+    setComments((prev) => {
+      const updated = [newCommentItem, ...prev]
+      try {
+        localStorage.setItem(`tv_comments_${place.id}`, JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
+    setNewComment('')
+
+    // Attempt to sync to Supabase
+    if (isSupabaseConfigured) {
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        const userId = authData?.user?.id || null
+
+        await supabase.from('place_comments').insert({
+          place_id: place.id,
+          user_id: userId,
+          user_email: commentEmail,
+          rating: commentRating,
+          comment: newCommentItem.comment,
+        })
+      } catch (err: any) {
+        console.warn('Saved comment locally; Supabase sync:', err)
+      }
+    }
+
+    setSubmittingComment(false)
   }
 
   return (
@@ -279,123 +288,114 @@ export default function PlaceModal({
             </div>
           )}
 
-          {/* 1. Comments & Feedback for Local Curated Places */}
-          {place.isLocal && (
-            <div className="pt-3 border-t border-slate-100 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <span>Visitor Reviews & Feedback</span>
-                  <span className="text-[11px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
-                    {comments.length}
-                  </span>
-                </h3>
-                <span className="text-[11px] text-violet-700 font-semibold bg-violet-50 px-2.5 py-0.5 rounded-full border border-violet-200">
-                  Local Community
+          {/* 1. Community Comments & Feedback for ALL Places */}
+          <div className="pt-3 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <span>Visitor Reviews & Feedback</span>
+                <span className="text-[11px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+                  {comments.length}
                 </span>
+              </h3>
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                place.isLocal
+                  ? 'text-violet-700 bg-violet-50 border-violet-200'
+                  : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+              }`}>
+                {place.isLocal ? 'Local Community' : 'Community Feedback'}
+              </span>
+            </div>
+
+            {/* Review input form */}
+            <form onSubmit={handleCommentSubmit} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700">
+                  Post as <span className="text-emerald-700 font-semibold">{userEmail || 'Traveler'}</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setCommentRating(star)}
+                      className={`text-base leading-none transition cursor-pointer ${
+                        star <= commentRating ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'
+                      }`}
+                      title={`${star} Star${star > 1 ? 's' : ''}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Review input form for Authenticated / Logged-in users */}
-              {!isGuest ? (
-                <form onSubmit={handleCommentSubmit} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700">
-                      Post as <span className="text-emerald-700 font-semibold">{userEmail}</span>
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          type="button"
-                          onClick={() => setCommentRating(star)}
-                          className={`text-base leading-none transition cursor-pointer ${
-                            star <= commentRating ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'
-                          }`}
-                          title={`${star} Star${star > 1 ? 's' : ''}`}
-                        >
-                          ★
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <textarea
+                rows={3}
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Share your experience, tips, or recommendations for this place..."
+                maxLength={500}
+                required
+                className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 resize-none"
+              />
 
-                  <textarea
-                    rows={3}
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Share your experience, tips, or recommendations for this place..."
-                    maxLength={500}
-                    required
-                    className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 resize-none"
-                  />
-
-                  {commentError && (
-                    <p className="text-[11px] font-semibold text-rose-600">{commentError}</p>
-                  )}
-
-                  <div className="flex items-center justify-between pt-0.5">
-                    <span className="text-[10px] text-slate-400">{newComment.length}/500</span>
-                    <button
-                      type="submit"
-                      disabled={submittingComment || !newComment.trim()}
-                      className="rounded-xl bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                    >
-                      {submittingComment ? 'Posting…' : 'Post Feedback'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="rounded-2xl bg-amber-50/80 border border-amber-200/80 p-3.5 flex items-center gap-2.5 text-xs text-amber-900">
-                  <span className="text-base">🔒</span>
-                  <p className="leading-snug">
-                    You are exploring in <strong>Guest Mode</strong>. Sign in with an account to post feedback or reviews for local places.
-                  </p>
-                </div>
+              {commentError && (
+                <p className="text-[11px] font-semibold text-rose-600">{commentError}</p>
               )}
 
-              {/* Scrollable Comments List (first few visible, rest scrollable) */}
-              <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-                {loadingComments ? (
-                  <p className="text-xs text-slate-500 py-2">Loading visitor feedback…</p>
-                ) : comments.length === 0 ? (
-                  <div className="rounded-2xl bg-slate-50/60 border border-slate-100 p-4 text-center">
-                    <p className="text-xs text-slate-500">No feedback posted yet for this local place.</p>
-                    {!isGuest && (
-                      <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-                        Be the first to share your thoughts!
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  comments.map((c) => (
-                    <div key={c.id} className="rounded-2xl bg-slate-50/80 p-3.5 border border-slate-200/60 text-xs">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-full bg-violet-700 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0">
-                            {c.user_email?.slice(0, 1) || 'U'}
-                          </div>
-                          <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-xs">
-                            {c.user_email}
-                          </span>
-                        </div>
-                        <span className="font-bold text-amber-600 shrink-0">★ {c.rating}.0</span>
-                      </div>
-                      <p className="text-slate-700 mt-1 leading-relaxed whitespace-pre-wrap">{c.comment}</p>
-                      <span className="text-[10px] text-slate-400 mt-1 block">
-                        {c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Recent'}
-                      </span>
-                    </div>
-                  ))
-                )}
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="text-[10px] text-slate-400">{newComment.length}/500</span>
+                <button
+                  type="submit"
+                  disabled={submittingComment || !newComment.trim()}
+                  className="rounded-xl bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  {submittingComment ? 'Posting…' : 'Post Feedback'}
+                </button>
               </div>
-            </div>
-          )}
+            </form>
 
-          {/* 2. Reviews for TripAdvisor places only */}
+            {/* Scrollable Comments List */}
+            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+              {loadingComments ? (
+                <p className="text-xs text-slate-500 py-2">Loading visitor feedback…</p>
+              ) : comments.length === 0 ? (
+                <div className="rounded-2xl bg-slate-50/60 border border-slate-100 p-4 text-center">
+                  <p className="text-xs text-slate-500">No feedback posted yet for this place.</p>
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+                    Be the first to share your thoughts!
+                  </p>
+                </div>
+              ) : (
+                comments.map((c) => (
+                  <div key={c.id} className="rounded-2xl bg-slate-50/80 p-3.5 border border-slate-200/60 text-xs">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-emerald-800 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0">
+                          {c.user_email?.slice(0, 1) || 'U'}
+                        </div>
+                        <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-xs">
+                          {c.user_email}
+                        </span>
+                      </div>
+                      <span className="font-bold text-amber-600 shrink-0">★ {c.rating}.0</span>
+                    </div>
+                    <p className="text-slate-700 mt-1 leading-relaxed whitespace-pre-wrap">{c.comment}</p>
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      {c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Recent'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 2. Reviews for TripAdvisor places */}
           {!place.isLocal && (
-            <div className="pt-2">
+            <div className="pt-3 border-t border-slate-100">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-slate-900">TripAdvisor Reviews</h3>
-                <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
+                <h3 className="text-sm font-bold text-slate-900">TripAdvisor Verified Reviews</h3>
+                <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   Live TripAdvisor API
                 </span>
               </div>
